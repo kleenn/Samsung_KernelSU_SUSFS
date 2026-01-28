@@ -31,7 +31,7 @@ jobs:
 
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_NAME: "Samsung GKI Kernels With WKSU & SUSFS v1.5.12"
+      RELEASE_NAME: "Samsung GKI Kernels With WKSU v3.0.0 & SUSFS v2.0.0"
       RELEASE_BODY: ""
     steps:
       - name: Download Apache Arrow's util_free_space.sh
