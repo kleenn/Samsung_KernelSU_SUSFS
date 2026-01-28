@@ -222,9 +222,9 @@ jobs:
 
       - name: Set Kernel Configuration Variables
         run: |
-          cd "$COMMON"
+          
           echo "Initializing kernel configuration..."
-          cat >> "${{ env.DEFCONFIG }}" << 'EOF'
+          cat >> "$DEFCONFIG" << 'EOF'
           # KernelSU Configuration
           CONFIG_KSU=y
           CONFIG_KSU_SUSFS=y
