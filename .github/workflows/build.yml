@@ -176,6 +176,7 @@ jobs:
             cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
             patch -p1 < fix_namespace.patch
             patch -p1 < fix_base.patch
+            patch -p1 < fix_exec.patch
           elif [[ "${{ inputs.branch }}" == "SM-F946N" ]]; then
             cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
             patch -p1 < fix_namespace.patch
