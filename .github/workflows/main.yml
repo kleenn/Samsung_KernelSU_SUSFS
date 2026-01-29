@@ -48,7 +48,7 @@ jobs:
         run: |
             LATEST_TAG=$(gh api repos/${{ github.repository }}/tags --jq '.[0].name' 2>/dev/null || echo "")
             if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v1.5.12-r0"
+              LATEST_TAG="v2.0.0-r0"
             fi
             
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
@@ -72,16 +72,11 @@ jobs:
           Please ensure you have proper backups before installation.
 
           Features:
-          -> Wild KSU
-          -> Multi Manager Support for WKSU, KernelSU-Next! Needs Testing: KSU, MKSU RKSU, xxKSU, KowSU and SukiSU (Best compatibility with WKSU, no support will be provided for other managers)
-          -> SUSFS ඞ v1.5.12
-          -> Scope-Minimized Manual hooks v1.4
-          -> Ptrace Patch Support for Older Kernels (<5.16)
-          -> IPSet Support for Advanced Network Filtering
-          -> Wireguard Support
-          -> BBR v1 Support
-          -> Kernel Sound System: Basic audio support with PCM, timers, procfs info, dynamic devices, and loopback module (module found at /data/adb/lkm after install)
-          -> Added BBG support to prevent unauthorised writes to certain partitions: https://github.com/vc-teahouse/Baseband-guard
+          -> Wild KSU Manager Support, Also Compatible with KernelSU-Next Manager
+          -> SUSFS ඞ v2.0.0
+          -> SUSFS Inline hooks
+          -> BBG: https://github.com/vc-teahouse/Baseband-guard
+          -> KPN: Added support for KernelPatch-Next.
 
           🔹 BBG (Baseband-guard)
           - A lightweight LSM (Linux Security Module) for Android kernel
@@ -91,12 +86,8 @@ jobs:
           - Reduces risk of soft-brick/hard-brick issues
 
           Notes:
-          -> SUS SU Mode 2 will show as disabled or not compatible due to non-kprobe hooks and is not needed anymore!
-          -> Official Kernel Flasher is broken with latest susfs, try https://github.com/fatalcoder524/KernelFlasher/
-          -> **boot.img files**: Available as CI artifacts only - download from the Actions tab in the "Misc" Artifact
-          -> **Warning**: boot.img files may not boot on some devices
-          -> **Note:** For detailed commit information and component versions, please check the build summary in the "Misc" Artifact
-
+          - The only modifications to Samsung Kernels at this time are WKSU and SUSFS. Everything else is left at default settings.
+          
           Module: 
           -> https://github.com/sidex15/ksu_module_susfs
       
