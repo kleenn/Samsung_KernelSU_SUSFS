@@ -187,6 +187,7 @@ jobs:
             patch -p1 < fix_namespace.patch
             patch -p1 < fix_base.patch
             patch -p1 < Disable_CRC.patch
+            patch -p1 < fix_exec.patch
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
             patch -p1 < fix_namespace.patch
