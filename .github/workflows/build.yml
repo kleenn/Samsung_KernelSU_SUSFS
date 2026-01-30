@@ -230,15 +230,22 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
 
           # nuke root protection
-          CONFIG_UH=n
-          CONFIG_UH_RKP=n
-          CONFIG_UH_LKMAUTH=n
-          CONFIG_UH_LKM_BLOCK=n
-          CONFIG_RKP_CFP_JOPP=n
-          CONFIG_RKP_CFP=n
-          CONFIG_SECURITY_DEFEX=n
-          CONFIG_PROCA=n
-          CONFIG_FIVE=n
+          # CONFIG_UH is not set
+          # CONFIG_UH_RKP is not set
+          # CONFIG_UH_LKMAUTH is not set
+          # CONFIG_UH_LKM_BLOCK is not set
+          # CONFIG_RKP_CFP_JOPP is not set
+          # CONFIG_RKP_CFP is not set
+          # CONFIG_PROCA is not set
+          # CONFIG_FIVE is not set
+          # CONFIG_SECURITY_DEFEX is not set
+          # CONFIG_SECURITY_DEFEX_USER is not set
+          # CONFIG_SECURITY_DEFEX_IMR_V2 is not set
+          # CONFIG_PROCA is not set
+          # CONFIG_PROCA_FS is not set
+          # CONFIG_PROCA_S_OS is not set
+          # CONFIG_PROCA_GKI_10 is not set
+          # CONFIG_PROCA_CERTIFICATES_DB is not set
           
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./build.config.gki
