@@ -161,49 +161,56 @@ jobs:
 
           # Apply SUSFS core patch
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+          cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
 
           # Fix SUSFS rejects
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" ]]; then
-            cp "$KERNEL_PATCHES/samsung/S24U/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-          elif [[ "${{ inputs.branch }}" == "SM-S918B-Oneui8" ]]; then
-            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < fix_exec.patch
-          elif [[ "${{ inputs.branch }}" == "SM-X916B" ]]; then
-            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < fix_exec.patch
-          elif [[ "${{ inputs.branch }}" == "SM-F946N" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" ]]; then
-            cp "$KERNEL_PATCHES/samsung/SM-F946N/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < fix_exec.patch
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" ]]; then
-            cp "$KERNEL_PATCHES/samsung/SM-A546B-Oneui7/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < Disable_CRC.patch
-            patch -p1 < fix_exec.patch
-            patch -p1 < configLSM.patch
-          elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
-            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < fix_taskmmu.patch
-          elif [[ "${{ inputs.branch }}" == "SM-S916B-Oneui8" ]]; then
-            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-            patch -p1 < fix_exec.patch
-          elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
-            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
-            patch -p1 < fix_namespace.patch
-            patch -p1 < fix_base.patch
-          fi
+          for p in *.patch; do
+           patch -p1 < "$p"
+          done
+
+#          # Fix SUSFS rejects
+#          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/S24U/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-S918B-Oneui8" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < fix_exec.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-X916B" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < fix_exec.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-F946N" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/SM-F946N/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < fix_exec.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/SM-A546B-Oneui7/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < Disable_CRC.patch
+#            patch -p1 < fix_exec.patch
+#            patch -p1 < configLSM.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < fix_taskmmu.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-S916B-Oneui8" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#            patch -p1 < fix_exec.patch
+#          elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
+#            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+#            patch -p1 < fix_namespace.patch
+#            patch -p1 < fix_base.patch
+#          fi
 
       - name: Add BBG
         run: |          
