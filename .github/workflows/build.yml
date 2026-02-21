@@ -246,43 +246,43 @@ jobs:
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" ]]; then
            echo "Nothing else needed"
           elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" ]]; then
-           cat >> "$DEFCONFIG" << 'EOF'
-           # nuke root protection
-           CONFIG_UH=n
-           CONFIG_UH_RKP=n
-           CONFIG_UH_LKMAUTH=n
-           CONFIG_UH_LKM_BLOCK=n
-           CONFIG_RKP_CFP_JOPP=n
-           CONFIG_RKP_CFP=n
-           CONFIG_SECURITY_DEFEX=n
-           CONFIG_PROCA=n
-           CONFIG_FIVE=n
-           
-           #Force Load Kernel Modules
-           CONFIG_MODULES=y
-           CONFIG_MODULE_FORCE_LOAD=y
-           CONFIG_MODULE_UNLOAD=y
-           CONFIG_MODULE_FORCE_UNLOAD=y
-           CONFIG_MODVERSIONS=y
-           CONFIG_MODULE_SRCVERSION_ALL=n
-           CONFIG_MODULE_SIG=n
-           CONFIG_MODULE_COMPRESS=n
-           CONFIG_TRIM_UNUSED_KSYMS=n
-           EOF
+          cat >> "$DEFCONFIG" << 'EOF'
+          # nuke root protection
+          CONFIG_UH=n
+          CONFIG_UH_RKP=n
+          CONFIG_UH_LKMAUTH=n
+          CONFIG_UH_LKM_BLOCK=n
+          CONFIG_RKP_CFP_JOPP=n
+          CONFIG_RKP_CFP=n
+          CONFIG_SECURITY_DEFEX=n
+          CONFIG_PROCA=n
+          CONFIG_FIVE=n
+          
+          #Force Load Kernel Modules
+          CONFIG_MODULES=y
+          CONFIG_MODULE_FORCE_LOAD=y
+          CONFIG_MODULE_UNLOAD=y
+          CONFIG_MODULE_FORCE_UNLOAD=y
+          CONFIG_MODVERSIONS=y
+          CONFIG_MODULE_SRCVERSION_ALL=n
+          CONFIG_MODULE_SIG=n
+          CONFIG_MODULE_COMPRESS=n
+          CONFIG_TRIM_UNUSED_KSYMS=n
+          EOF
            
           else
-           cat >> "$DEFCONFIG" << 'EOF'
-           # nuke root protection
-           CONFIG_UH=n
-           CONFIG_UH_RKP=n
-           CONFIG_UH_LKMAUTH=n
-           CONFIG_UH_LKM_BLOCK=n
-           CONFIG_RKP_CFP_JOPP=n
-           CONFIG_RKP_CFP=n
-           CONFIG_SECURITY_DEFEX=n
-           CONFIG_PROCA=n
-           CONFIG_FIVE=n
-           EOF
+          cat >> "$DEFCONFIG" << 'EOF'
+          # nuke root protection
+          CONFIG_UH=n
+          CONFIG_UH_RKP=n
+          CONFIG_UH_LKMAUTH=n
+          CONFIG_UH_LKM_BLOCK=n
+          CONFIG_RKP_CFP_JOPP=n
+          CONFIG_RKP_CFP=n
+          CONFIG_SECURITY_DEFEX=n
+          CONFIG_PROCA=n
+          CONFIG_FIVE=n
+          EOF
           fi
           
           cd "$COMMON"
