@@ -248,6 +248,9 @@ jobs:
           # Mountify Support
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
+
+          # increase log buffer size
+          CONFIG_LOG_BUF_SHIFT=20
           EOF
 
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" ]]; then
