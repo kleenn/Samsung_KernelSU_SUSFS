@@ -6,7 +6,7 @@
 [![SUSFS](https://img.shields.io/badge/SUSFS-Integrated-orange)](https://gitlab.com/simonpunk/susfs4ksu)
 
 </div>
-
+<div align="center">
 ## ⚠️ Your warranty is no longer valid!
 
 I am **not responsible** for bricked devices, damaged hardware, or any issues that arise from using this kernel.
@@ -54,16 +54,14 @@ For GKI installation, please follow the official guide:
 
 ---
 
-## 🏆 Credits
-
-- 🔐 **KernelSU**: Developed by [tiann](https://github.com/tiann/KernelSU)
-- 🚀 **KernelSU-Next**: Developed by [rifsxd](https://github.com/KernelSU-Next/KernelSU-Next)
-- ✨ **Magic-KSU**: Developed by [5ec1cff](https://github.com/5ec1cff/KernelSU)
-- 🛡️ **SUSFS**: Developed by [simonpunk](https://gitlab.com/simonpunk/susfs4ksu.git)
-- 🛡️ **Baseband-guard (BBG)**: Developed by [vc-teahouse](https://github.com/vc-teahouse/Baseband-guard)
-- 📦 **SUSFS Module**: Developed by [sidex15](https://github.com/sidex15)
-- 👑 **Sultan Kernels**: Developed by [kerneltoast](https://github.com/kerneltoast)
-- 🔧 **Device Boot Fix**: [Boot fix commit](https://github.com/Anything-at-25-00/android_kernel_common_android12-5.10/commit/2476d262b597fe8af82cfb7aaf96676f51c6b4ed) for fixing some devices not booting
+| 🔧 **Project** | 👨‍💻 **Developer** | 🔗 **Link** |
+|:---------------:|:----------------:|:-----------:|
+| **KernelSU** | tiann | [![GitHub](https://img.shields.io/badge/GitHub-tiann-blue?style=flat-square&logo=github)](https://github.com/tiann/KernelSU) |
+| **KernelSU-Next** | rifsxd | [![GitHub](https://img.shields.io/badge/GitHub-rifsxd-blue?style=flat-square&logo=github)](https://github.com/KernelSU-Next/KernelSU-Next) |
+| **Magic-KSU** | 5ec1cff | [![GitHub](https://img.shields.io/badge/GitHub-5ec1cff-blue?style=flat-square&logo=github)](https://github.com/5ec1cff/KernelSU) |
+| **SUSFS** | simonpunk | [![GitLab](https://img.shields.io/badge/GitLab-simonpunk-orange?style=flat-square&logo=gitlab)](https://gitlab.com/simonpunk/susfs4ksu.git) |
+| **SUSFS Module** | sidex15 | [![GitHub](https://img.shields.io/badge/GitHub-sidex15-blue?style=flat-square&logo=github)](https://github.com/sidex15) |
+| **Sultan Kernels** | kerneltoast | [![GitHub](https://img.shields.io/badge/GitHub-kerneltoast-blue?style=flat-square&logo=github)](https://github.com/kerneltoast) |
 
 🙏 Special thanks to the open-source community for their contributions!
 
@@ -114,8 +112,12 @@ Flashing this kernel will void your warranty, and there is always a risk of bric
 *If you have contributed and are not listed here, please remind me!* 🙏
 
 ---
-
+<div align="center">
 ## 💝 Donations
 
 Any and all donations are appreciated!
+
+PayPal: [paypal.me/NgadhnjimHoxha](paypal.me/NgadhnjimHoxha)
+
+Wise: [wise.com/pay/me/ngadhnjimh](wise.com/pay/me/ngadhnjimh)
 
