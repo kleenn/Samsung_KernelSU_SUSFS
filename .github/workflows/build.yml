@@ -389,7 +389,7 @@ jobs:
           elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
             cp ./out/s5e9945_user/dist/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S901E-Oneui8" ]]; then
-            cp ./out/msm-waipo-waipo-gki/dist/Image "$ANYKERNEL3/Image"
+            cp ./out/msm-waipio-waipio-gki/dist/Image "$ANYKERNEL3/Image"
           else
             echo "Error: Image file not found in any expected location"
             exit 1
