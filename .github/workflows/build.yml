@@ -384,7 +384,7 @@ jobs:
 
       - name: Upload AnyKernel3 Artifacts
         id: upload_ak3
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.FILE_NAME }}-AnyKernel3
           path: |
