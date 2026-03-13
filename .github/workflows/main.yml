@@ -51,7 +51,7 @@ jobs:
           testing: false
       
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Generate New Tag
         if: inputs.release_type != 'Actions'
@@ -67,7 +67,7 @@ jobs:
             echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           path: ./downloaded-artifacts
           pattern: '*-AnyKernel3'
