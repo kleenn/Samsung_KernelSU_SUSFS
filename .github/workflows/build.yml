@@ -230,13 +230,13 @@ jobs:
           cat >> "$COMMON/arch/arm64/configs/gki_sec_defconfig" << 'EOF'
           #disable KPM securities
           # CONFIG_KDP_NS is not set
-          # CONFIG_KDP is not set
+          #CONFIG_KDP is not set
           # CONFIG_KDP_CRED is not set
           # CONFIG_TIMA is not set
           # CONFIG_TZDEV is not set
           # CONFIG_SEC_RESTRICT_ROOTING is not set
           # CONFIG_KNOX_KAP is not set
-          # CONFIG_KNOX_NCM is not set
+          #CONFIG_KNOX_NCM is not set
           # CONFIG_SEC_KUNIT is not set
           # CONFIG_INTEGRITY is not set
           # CONFIG_IMA is not set
