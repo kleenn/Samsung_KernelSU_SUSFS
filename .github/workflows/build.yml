@@ -137,8 +137,8 @@ jobs:
 
           else
               echo "⚠ Not a git repo, using defaults"
-              KSU_VERSION=33179
-              KSU_GIT_TAG="v3.0.0"
+              KSU_VERSION=33208
+              KSU_GIT_TAG="v3.0.1"
           fi
 
           echo "Computed version: $KSU_VERSION"
@@ -227,21 +227,8 @@ jobs:
           EOF
 
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" ]]; then
-          cat >> "$COMMON/arch/arm64/configs/gki_sec_defconfig" << 'EOF'
-          #disable KPM securities
-          # CONFIG_KDP_NS is not set
-          #CONFIG_KDP is not set
-          # CONFIG_KDP_CRED is not set
-          # CONFIG_TIMA is not set
-          # CONFIG_TZDEV is not set
-          # CONFIG_SEC_RESTRICT_ROOTING is not set
-          # CONFIG_KNOX_KAP is not set
-          #CONFIG_KNOX_NCM is not set
-          # CONFIG_SEC_KUNIT is not set
-          # CONFIG_INTEGRITY is not set
-          # CONFIG_IMA is not set
-          EOF
-          
+          echo "nothing needs to be done"
+                    
           elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
           cat >> "$DEFCONFIG" << 'EOF'
           # nuke root protection
@@ -255,20 +242,9 @@ jobs:
           CONFIG_PROCA=n
           CONFIG_FIVE=n
           CONFIG_RKP=n
-          
-          #disable KPM securities
           CONFIG_KDP_NS=n
           CONFIG_KDP=n
-          CONFIG_KDP_CRED=n
-          CONFIG_TIMA=n
-          CONFIG_TZDEV=n
-          CONFIG_SEC_RESTRICT_ROOTING=n
-          CONFIG_KNOX_KAP=n
-          CONFIG_KNOX_NCM=n
-          CONFIG_SEC_KUNIT=n
-          CONFIG_INTEGRITY=n
-          CONFIG_IMA=n
-          
+                              
           #Force Load Kernel Modules
           CONFIG_MODULES=y
           CONFIG_MODULE_FORCE_LOAD=y
@@ -294,19 +270,8 @@ jobs:
           CONFIG_PROCA=n
           CONFIG_FIVE=n
           CONFIG_RKP=n
-          
-          #disable KPM securities
           CONFIG_KDP_NS=n
           CONFIG_KDP=n
-          CONFIG_KDP_CRED=n
-          CONFIG_TIMA=n
-          CONFIG_TZDEV=n
-          CONFIG_SEC_RESTRICT_ROOTING=n
-          CONFIG_KNOX_KAP=n
-          CONFIG_KNOX_NCM=n
-          CONFIG_SEC_KUNIT=n
-          CONFIG_INTEGRITY=n
-          CONFIG_IMA=n
           EOF
 
           else
@@ -321,20 +286,9 @@ jobs:
           CONFIG_SECURITY_DEFEX=n
           CONFIG_PROCA=n
           CONFIG_FIVE=n
-          CONFIG_RKP=n
-
-          #disable KPM securities
+          CONFIG_RKP=n  
           CONFIG_KDP_NS=n
           CONFIG_KDP=n
-          CONFIG_KDP_CRED=n
-          CONFIG_TIMA=n
-          CONFIG_TZDEV=n
-          CONFIG_SEC_RESTRICT_ROOTING=n
-          CONFIG_KNOX_KAP=n
-          CONFIG_KNOX_NCM=n
-          CONFIG_SEC_KUNIT=n
-          CONFIG_INTEGRITY=n
-          CONFIG_IMA=n
           EOF
           fi
           
