@@ -356,7 +356,6 @@ jobs:
       - name: Clean Dirty Flags
         run: |
           # remove dirty
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./kernel_platform/build/kernel/kleaf/impl/stamp.bzl || true
           sed -i 's/-dirty//' "./$COMMON/scripts/setlocalversion"
           
 
