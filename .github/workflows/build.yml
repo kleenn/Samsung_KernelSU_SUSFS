@@ -219,11 +219,7 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
 
           # increase log buffer size to show bbg version in wksu homepage
-          CONFIG_LOG_BUF_SHIFT=20
-
-          # Enable KPM
-          CONFIG_KALLSYMS=y
-          CONFIG_KALLSYMS_ALL=y
+          CONFIG_LOG_BUF_SHIFT=20          
           EOF
 
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" ]]; then
