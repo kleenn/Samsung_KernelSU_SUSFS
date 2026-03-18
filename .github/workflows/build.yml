@@ -355,17 +355,16 @@ jobs:
 
       - name: Clean Dirty Flags
         run: |
-          cd "$COMMON"
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
-          sed -i 's/-dirty//' ./scripts/setlocalversion
-
+          # remove dirty
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./kernel_platform/build/kernel/kleaf/impl/stamp.bzl || true
+          sed -i 's/-dirty//' "./$COMMON/scripts/setlocalversion"
+          
 
           # Commit changes to avoid dirty state during build
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Wild: Clean Dirty Flag"
-          
+          git commit -m "Wild: Clean Dirty Flag"          
 
       - name: Set file name
         run: |
