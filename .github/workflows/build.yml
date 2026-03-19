@@ -59,15 +59,15 @@ jobs:
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
 
           cd susfs4ksu
-          if [[ "$SUSFSBRANCH" == "gki-android13-5.15" ]]; then
+          if [[ "$SUSFS_BRANCH" == "gki-android13-5.15" ]]; then
             git checkout "f20b72ca8c5214275af2cd969c58d8054a761353"
-          elif [[ "$SUSFSBRANCH" == "gki-android14-6.1" ]]; then
+          elif [[ "$SUSFS_BRANCH" == "gki-android14-6.1" ]]; then
             git checkout "eab9a5ed3184c8f0c8ae1a2eb1863d1f0ae7fac3"
-          elif [[ "$SUSFSBRANCH" == "gki-android15-6.6" ]]; then
+          elif [[ "$SUSFS_BRANCH" == "gki-android15-6.6" ]]; then
             git checkout "f17b8be07a95217d89a76cf527f9e8bd937539d7"
-          elif [[ "$SUSFSBRANCH" == "gki-android12-5.10" ]]; then
+          elif [[ "$SUSFS_BRANCH" == "gki-android12-5.10" ]]; then
             git checkout "44ba5277006c088caeec4a760304e756ed614cde"
-          elif [[ "$SUSFSBRANCH" == "gki-android13-5.10" ]]; then
+          elif [[ "$SUSFS_BRANCH" == "gki-android13-5.10" ]]; then
             git checkout "27c47e0f172191faab8da61ab03636a131f736c0"
           fi
       
