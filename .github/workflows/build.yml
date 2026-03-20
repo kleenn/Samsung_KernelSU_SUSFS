@@ -272,8 +272,6 @@ jobs:
           CONFIG_SAMSUNG_TUI=n
           CONFIG_TEE=n
           CONFIG_TRUSTED_FOUNDATIONS=n
-          CONFIG_STRICT_KERNEL_RWX=n
-          CONFIG_STRICT_MODULE_RWX=n
           
           #Force Load Kernel Modules
           CONFIG_MODULES=y
@@ -317,8 +315,6 @@ jobs:
           CONFIG_SAMSUNG_TUI=n
           CONFIG_TEE=n
           CONFIG_TRUSTED_FOUNDATIONS=n
-          CONFIG_STRICT_KERNEL_RWX=n
-          CONFIG_STRICT_MODULE_RWX=n
           EOF
 
           else
@@ -351,8 +347,6 @@ jobs:
           CONFIG_SAMSUNG_TUI=n
           CONFIG_TEE=n
           CONFIG_TRUSTED_FOUNDATIONS=n
-          CONFIG_STRICT_KERNEL_RWX=n
-          CONFIG_STRICT_MODULE_RWX=n
           EOF
           fi
           
@@ -398,7 +392,7 @@ jobs:
           elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
             sudo apt update
             sudo apt-get install -y libyaml-dev
-            LTO=thin ./build_kernel.sh || true
+            LTO=thin KPM=1 ./build_kernel.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             chmod +x build_script.sh
             touch ./kernel-6.6/abi_symbollist.raw
