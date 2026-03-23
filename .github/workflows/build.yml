@@ -277,7 +277,6 @@ jobs:
           CONFIG_TEE=n
           CONFIG_TRUSTED_FOUNDATIONS=n
           CONFIG_EXYNOS_S2MPU=n
-          CONFIG_KPM_BUILD=y
           
           #Force Load Kernel Modules
           CONFIG_MODULES=y
