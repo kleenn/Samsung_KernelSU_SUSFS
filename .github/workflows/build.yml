@@ -277,6 +277,12 @@ jobs:
           CONFIG_TEE=n
           CONFIG_TRUSTED_FOUNDATIONS=n
           CONFIG_EXYNOS_S2MPU=n
+          CONFIG_DEBUG_RODATA=n
+          CONFIG_SELINUX=n
+          CONFIG_RANDOMIZE_BASE=n
+          CONFIG_ARM64_PTR_AUTH=n
+          CONFIG_IMA_APPRAISE=n
+          CONFIG_DM_VERITY=n
           
           #Force Load Kernel Modules
           CONFIG_MODULES=y
@@ -286,6 +292,7 @@ jobs:
           CONFIG_MODVERSIONS=y
           CONFIG_MODULE_SRCVERSION_ALL=n
           CONFIG_MODULE_SIG=n
+          CONFIG_MODULE_SIG_FORCE=n
           CONFIG_MODULE_COMPRESS=n
           CONFIG_TRIM_UNUSED_KSYMS=n
           EOF
