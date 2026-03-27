@@ -376,7 +376,7 @@ jobs:
           #  exit 1
           #fi
           
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" ||  ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" ]]; then
             cp ./kernel_platform/sec/dist/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" ]]; then
             cp ./kernel_platform/out/msm-pineapple-pineapple-gki/dist/Image "$ANYKERNEL3/Image"
