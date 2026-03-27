@@ -199,7 +199,7 @@ jobs:
            s/"kmi_symbol_list_strict_mode": True/"kmi_symbol_list_strict_mode": False/
            s/"trim_nonlisted_kmi": True/"trim_nonlisted_kmi": False/
            }
-           ' kernel_platform/common/BUILD.bazel
+           ' BUILD.bazel
          fi
 
          cp "$KERNEL_PATCHES/samsung/min_kdp/min_kdp.c" drivers/min_kdp.c
