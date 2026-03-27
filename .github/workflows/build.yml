@@ -188,9 +188,12 @@ jobs:
          echo "kdp_usecount_dec_and_test" >> $SYMBOL_LIST
          echo "kdp_usecount_inc" >> $SYMBOL_LIST
 
+         if [[ "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
+           echo "snd_soc_find_daikdp_set_cred_non_rcu" >> $SYMBOL_LIST
+         fi
+
          cp "$KERNEL_PATCHES/samsung/min_kdp/min_kdp.c" drivers/min_kdp.c
-         echo "obj-y += min_kdp.o" >> drivers/Makefile
-         
+         echo "obj-y += min_kdp.o" >> drivers/Makefile         
 
       - name: Add BBG
         run: |          
