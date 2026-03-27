@@ -222,7 +222,7 @@ jobs:
           CONFIG_LOG_BUF_SHIFT=20          
           EOF
 
-          if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
           echo "nothing needs to be done"
                     
           elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
