@@ -190,6 +190,16 @@ jobs:
 
          if [[ "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
            echo "snd_soc_find_dai" >> $SYMBOL_LIST
+           sed -i '
+           /"kernel_aarch64": {/,/},/ {
+           s/"kmi_symbol_list_strict_mode": True/"kmi_symbol_list_strict_mode": False/
+           s/"trim_nonlisted_kmi": True/"trim_nonlisted_kmi": False/
+           }
+           /"kernel_aarch64_16k": {/,/},/ {
+           s/"kmi_symbol_list_strict_mode": True/"kmi_symbol_list_strict_mode": False/
+           s/"trim_nonlisted_kmi": True/"trim_nonlisted_kmi": False/
+           }
+           ' kernel_platform/common/BUILD.bazel
          fi
 
          cp "$KERNEL_PATCHES/samsung/min_kdp/min_kdp.c" drivers/min_kdp.c
