@@ -17,11 +17,52 @@ on:
           - Release
         default: Actions
 
+      SUSFS:
+        description: "Build with SUSFS?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
+      BBG:
+        description: "Build with BBG?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
+      BBRv3:
+        description: "Add BBR?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
+      unicodefix:
+        description: "Add unicode fix?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
 jobs:
 
   build-samsung:
     uses: ./.github/workflows/kernel-samsung.yml
     secrets: inherit
+    with:
+      SUSFS: ${{ inputs.SUSFS }}
+      BBG: ${{ inputs.BBG }}
+      BBRv3: ${{ inputs.BBRv3 }}
+      unicodefix: ${{ inputs.unicodefix }}
 
   release:
     runs-on: ubuntu-latest
