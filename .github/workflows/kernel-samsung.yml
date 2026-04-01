@@ -18,7 +18,7 @@ jobs:
           - branch: "SM-S928B-Oneui7"
             android_version: "android14"
             kernel_version: "6.1"
-          - branch: "SM-S928B-Oneui8"
+          - branch: "SM-S928B-Oneui8-bit4"
             android_version: "android14"
             kernel_version: "6.1"
           - branch: "SM-S928B-Oneui6.1"
