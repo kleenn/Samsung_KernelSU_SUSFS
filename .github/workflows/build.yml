@@ -188,19 +188,20 @@ jobs:
           cp "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" ./          
 
           # Apply SUSFS core patch
+          curl -L -s https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/main/android14-6.1/samsung-fixes/SM-S928B/fix_namespace_context.patch | patch -p1 --forward
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
-          rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
-          cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+          #rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+          #cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
 
           # Fix SUSFS rejects
-          for p in *.patch; do
-           patch -p1 < "$p"
-          done
+          #for p in *.patch; do
+          # patch -p1 < "$p"
+          #done
 
           cd "$GITHUB_WORKSPACE"
           cat >> "$DEFCONFIG" << 'EOF'
           # SUSFS Configuration
-          CONFIG_KSU=y
+          CONFIG_KSU_SUSFS=y
           EOF
           
       - name: Fix WiFi and Bluetooth on Samsung 6.6 GKI devices
