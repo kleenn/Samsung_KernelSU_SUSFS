@@ -340,7 +340,7 @@ jobs:
           set -x
           cd "$CONFIG"
           echo "Building the kernel..."
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             ./build_kernel_GKI.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" ]]; then
@@ -376,7 +376,7 @@ jobs:
           #  exit 1
           #fi
           
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8" ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" ]]; then
             cp ./kernel_platform/sec/dist/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" ]]; then
             cp ./out/msm-pineapple-pineapple-gki/dist/Image "$ANYKERNEL3/Image"
@@ -400,19 +400,19 @@ jobs:
           fi
 
 
-      - name: Create Bootimgs Folder and Copy Images for Android 14/15
-        if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
-        run: |
-          #mkdir bootimgs
-          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./bootimgs
-          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./bootimgs
-          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./${{ env.FILE_NAME }}-Image
-          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./${{ env.FILE_NAME }}-Image.lz4
-
-          # Create gzip of the Image file
-          #gzip -n -k -f -9 ./${{ env.FILE_NAME }}-Image > ./${{ env.FILE_NAME }}-Image.gz
-          #gzip -n -k -f -9 ./bootimgs/Image > ./bootimgs/Image.gz
-          #cp ./boot-lz4.img ../${{ env.FILE_NAME }}-boot-lz4.img
+#      - name: Create Bootimgs Folder and Copy Images for Android 14/15
+#        if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
+#        run: |
+#          #mkdir bootimgs
+#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./bootimgs
+#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./bootimgs
+#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./${{ env.FILE_NAME }}-Image
+#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./${{ env.FILE_NAME }}-Image.lz4
+#
+#          # Create gzip of the Image file
+#          #gzip -n -k -f -9 ./${{ env.FILE_NAME }}-Image > ./${{ env.FILE_NAME }}-Image.gz
+#          #gzip -n -k -f -9 ./bootimgs/Image > ./bootimgs/Image.gz
+#          #cp ./boot-lz4.img ../${{ env.FILE_NAME }}-boot-lz4.img
 
       - name: Upload AnyKernel3 Artifacts
         id: upload_ak3
