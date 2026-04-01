@@ -197,7 +197,7 @@ jobs:
            patch -p1 < "$p"
           done
 
-          cd ..
+          cd "$GITHUB_WORKSPACE"
           cat >> "$DEFCONFIG" << 'EOF'
           # SUSFS Configuration
           CONFIG_KSU=y
@@ -265,7 +265,7 @@ jobs:
           echo "applying BBRv3"
           curl -L -s https://raw.githubusercontent.com/ahmed-alnassif/GKI-Duchamp/refs/heads/dev/kernel-patches/bbrv3/bbrv3.patch | patch -p1 --forward
 
-          cd ..
+          cd "$GITHUB_WORKSPACE"
           cat >> "$DEFCONFIG" << 'EOF'
           # Networking extras
           CONFIG_IP_NF_TARGET_TTL=y
