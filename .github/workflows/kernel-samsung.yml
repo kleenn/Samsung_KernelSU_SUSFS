@@ -75,6 +75,9 @@ jobs:
           - branch: "SM-S931B-Oneui8"
             android_version: "android15"
             kernel_version: "6.6"
+          - branch: "SM-X800-Oneui8"
+            android_version: "android12"
+            kernel_version: "5.10"
 
     uses: ./.github/workflows/build.yml
     secrets: inherit
