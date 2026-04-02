@@ -205,15 +205,20 @@ jobs:
           }' fs/namespace.c
           
           # Apply SUSFS core patch
-          #curl -L -s https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/main/android14-6.1/samsung-fixes/SM-S928B/fix_namespace_context.patch | patch -p1 --forward
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           #rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
           #cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
 
-          # Fix SUSFS rejects
-          #for p in *.patch; do
-          # patch -p1 < "$p"
-          #done
+          if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
+           echo "Directory exists, applying fixes"
+
+           # Fix SUSFS rejects
+           for p in *.patch; do
+            patch -p1 < "$p"
+           done
+          else
+           echo "No directory found, skipping"
+          fi
 
           cd "$GITHUB_WORKSPACE"
           cat >> "$DEFCONFIG" << 'EOF'
