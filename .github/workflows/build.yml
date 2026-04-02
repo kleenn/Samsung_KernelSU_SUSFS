@@ -207,10 +207,10 @@ jobs:
           # Apply SUSFS core patch
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           #rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
-          #cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
 
           if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
            echo "Directory exists, applying fixes"
+           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
 
            # Fix SUSFS rejects
            for p in *.patch; do
