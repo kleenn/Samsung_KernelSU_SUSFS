@@ -265,6 +265,18 @@ jobs:
           echo "CONFIG_BBG=y" >> arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
+          if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg" ]; then
+           echo "Directory exists, adding bbg in configLSM"
+           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg/"* ./
+
+           # patch for adding bbg in configLSM for some devices 
+           for p in *.patch; do
+            patch -p1 < "$p"
+           done
+          else
+           echo "BBG already enabled"
+          fi
+
 #          if grep -qxF $'\t\tconst char* symlink_target_link = inode->i_op->get_link(dentry, inode, NULL);' ./Baseband-guard/baseband_guard.c; then
 #           echo "Applying BBG get_link fix"
 #           patch -p1 --forward < "$KERNEL_PATCHES/experimental/bbg/bbg_fix_get_link.patch"
