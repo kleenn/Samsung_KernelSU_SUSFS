@@ -191,10 +191,10 @@ jobs:
           sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
 
           #Prepare namespace.c for susfs patching
-          perl -0777 -i -pe '
-          s/#include <linux\/fslog\.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp\.h>\n#endif\n//;
-          s/(#include <linux\/sched\/task\.h>\n)/$1#include <linux\/fslog.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp.h>\n#endif\n/;
-          ' fs/namespace.c
+          #perl -0777 -i -pe '
+          #s/#include <linux\/fslog\.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp\.h>\n#endif\n//;
+          #s/(#include <linux\/sched\/task\.h>\n)/$1#include <linux\/fslog.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp.h>\n#endif\n/;
+          #' fs/namespace.c
 
           sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
             /#ifdef CONFIG_KDP_NS/,/#endif/ {
