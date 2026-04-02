@@ -272,6 +272,7 @@ jobs:
            # patch for adding bbg in configLSM for some devices 
            for p in *.patch; do
             patch -p1 < "$p"
+            rm -f "$p"
            done
           else
            echo "BBG already enabled"
