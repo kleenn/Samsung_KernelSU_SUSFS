@@ -218,6 +218,7 @@ jobs:
            # Fix SUSFS rejects
            for p in *.patch; do
             patch -p1 < "$p"
+            rm -f "$p"
            done
           else
            echo "No directory found, skipping"
