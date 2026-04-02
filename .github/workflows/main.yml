@@ -68,10 +68,11 @@ jobs:
     uses: ./.github/workflows/kernel-samsung.yml
     secrets: inherit
     with:
-      SUSFS: ${{ inputs.SUSFS }}
-      BBG: ${{ inputs.BBG }}
-      BBRv3: ${{ inputs.BBRv3 }}
+      susfs: ${{ inputs.susfs }}
+      bbg: ${{ inputs.bbg }}
+      bbrv3: ${{ inputs.bbrv3 }}
       unicodefix: ${{ inputs.unicodefix }}
+      optimizations: ${{ inputs.optimizations }}
 
   release:
     runs-on: ubuntu-latest
