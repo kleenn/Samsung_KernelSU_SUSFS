@@ -424,7 +424,7 @@ jobs:
           if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             ./build_kernel_GKI.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             LTO=thin ./build_kernel_GKI.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
@@ -473,27 +473,12 @@ jobs:
             cp ./kernel-6.6/out/arch/arm64/boot/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
             cp ./out/s5e9945_user/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S901E-Oneui8" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" ]]; then
             cp ./out/msm-waipio-waipio-gki/dist/Image "$ANYKERNEL3/Image"
           else
             echo "Error: Image file not found in any expected location"
             exit 1
           fi
-
-
-#      - name: Create Bootimgs Folder and Copy Images for Android 14/15
-#        if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
-#        run: |
-#          #mkdir bootimgs
-#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./bootimgs
-#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./bootimgs
-#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./${{ env.FILE_NAME }}-Image
-#          #cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./${{ env.FILE_NAME }}-Image.lz4
-#
-#          # Create gzip of the Image file
-#          #gzip -n -k -f -9 ./${{ env.FILE_NAME }}-Image > ./${{ env.FILE_NAME }}-Image.gz
-#          #gzip -n -k -f -9 ./bootimgs/Image > ./bootimgs/Image.gz
-#          #cp ./boot-lz4.img ../${{ env.FILE_NAME }}-boot-lz4.img
 
       - name: Upload AnyKernel3 Artifacts
         id: upload_ak3
@@ -578,10 +563,10 @@ jobs:
             cd "$GITHUB_WORKSPACE/susfs4ksu"
             SUSFS_COMMIT=$(git rev-parse HEAD)
             SUSFS_URL="https://gitlab.com/simonpunk/susfs4ksu/-/commit/$SUSFS_COMMIT"
-            echo "- **SUSFS4KSU (v1.5.12)**: [$SUSFS_COMMIT]($SUSFS_URL)" >> "$GITHUB_WORKSPACE/build_summary.md"
+            echo "- **SUSFS4KSU (v2.1.0)**: [$SUSFS_COMMIT]($SUSFS_URL)" >> "$GITHUB_WORKSPACE/build_summary.md"
             cd "$GITHUB_WORKSPACE"
           else
-            echo "- **SUSFS4KSU (v1.5.12)**: not present" >> build_summary.md
+            echo "- **SUSFS4KSU (v2.1.0)**: not present" >> build_summary.md
           fi
           echo "" >> build_summary.md
           
