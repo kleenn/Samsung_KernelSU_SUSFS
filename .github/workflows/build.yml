@@ -213,7 +213,7 @@ jobs:
 
           if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
            echo "Directory exists, applying fixes"
-           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"* ./
+           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"*.patch ./
 
            # Fix SUSFS rejects
            for p in *.patch; do
