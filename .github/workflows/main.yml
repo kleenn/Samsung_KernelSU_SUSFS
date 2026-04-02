@@ -42,7 +42,7 @@ on:
         options:
           - yes
           - no
-        default: yes
+        default: no
 
       unicodefix:
         description: "Add unicode fix?"
@@ -52,6 +52,15 @@ on:
           - yes
           - no
         default: yes
+
+      optimizations:
+        description: "Add kernel optimizations?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: no
 
 jobs:
 
