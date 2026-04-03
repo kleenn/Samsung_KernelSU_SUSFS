@@ -194,11 +194,6 @@ jobs:
           sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
 
           #Prepare namespace.c for susfs patching
-          #perl -0777 -i -pe '
-          #s/#include <linux\/fslog\.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp\.h>\n#endif\n//;
-          #s/(#include <linux\/sched\/task\.h>\n)/$1#include <linux\/fslog.h>\n#ifdef CONFIG_KDP_NS\n#include <linux\/kdp.h>\n#endif\n/;
-          #' fs/namespace.c
-
           sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
             /#ifdef CONFIG_KDP_NS/,/#endif/ {
               /#else/,/#endif/!d
@@ -461,7 +456,7 @@ jobs:
           set -x
           cd "$CONFIG"
           echo "Building the kernel..."
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             ./build_kernel_GKI.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
