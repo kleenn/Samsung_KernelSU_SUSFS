@@ -84,6 +84,9 @@ jobs:
           - branch: "SM-S911B-Oneui8-bit8"
             android_version: "android13"
             kernel_version: "5.15"
+          - branch: "SM-F741B-Oneui8"
+            android_version: "android14"
+            kernel_version: "6.1"
 
     uses: ./.github/workflows/build.yml
     secrets: inherit
