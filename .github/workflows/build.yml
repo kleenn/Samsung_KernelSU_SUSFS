@@ -266,7 +266,7 @@ jobs:
            echo "No directory found, skipping"
           fi
           
-          patch -p1 < 51_enhanced_susfs_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          # patch -p1 < 51_enhanced_susfs_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           patch -p1 < 60_zeromount-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           patch -p1 < 70_ksu_safety-wksu-${{ inputs.kernel_version }}.patch || true
 
