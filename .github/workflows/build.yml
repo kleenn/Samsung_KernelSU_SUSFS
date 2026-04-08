@@ -87,7 +87,7 @@ jobs:
           SUSFS4KSU="$ROOT/susfs4ksu"
           KERNEL_PATCHES="$ROOT/kernel_patches"
           ANYKERNEL3="$ROOT/AnyKernel3"
-          ZEROMOUNT="$ROOT/zeromount"
+          ZEROMOUNT="$ROOT/Super-Builders"
           if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then  
             COMMON="$CONFIG"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
