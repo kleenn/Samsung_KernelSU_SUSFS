@@ -30,6 +30,9 @@ on:
       optimizations:
         required: true
         type: string
+      zeromount:
+        required: true
+        type: string
 
 jobs:
   build-samsung-gki:
@@ -72,6 +75,7 @@ jobs:
           git clone https://github.com/WildKernels/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
           git clone https://github.com/WildKernels/kernel_patches.git
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          git clone https://github.com/Enginex0/Super-Builders.git
       
       - name: Clone Kernel Source
         run: |
@@ -83,6 +87,7 @@ jobs:
           SUSFS4KSU="$ROOT/susfs4ksu"
           KERNEL_PATCHES="$ROOT/kernel_patches"
           ANYKERNEL3="$ROOT/AnyKernel3"
+          ZEROMOUNT="$ROOT/zeromount"
           if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then  
             COMMON="$CONFIG"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
@@ -109,6 +114,7 @@ jobs:
           echo "ANYKERNEL3=$ANYKERNEL3" >> $GITHUB_ENV
           echo "COMMON=$COMMON" >> $GITHUB_ENV
           echo "DEFCONFIG=$DEFCONFIG" >> $GITHUB_ENV
+          echo "ZEROMOUNT=$ZEROMOUNT" >> $GITHUB_ENV
           
       - name: Extract all tar.xz files and delete them
         run: |
@@ -180,7 +186,7 @@ jobs:
           echo "✅ Updated fallback values in $KBUILD"
 
       - name: Apply SUSFS Patches
-        if: inputs.susfs == 'true'
+        if: inputs.susfs == 'true' && inputs.zeromount == 'false'
         run: |
           cd "$COMMON"
           # Apply compatibility fixes
@@ -224,6 +230,64 @@ jobs:
           # SUSFS Configuration
           CONFIG_KSU_SUSFS=y
           EOF
+
+      - name: Apply zeromount Patches
+        if: inputs.susfs == 'false' && inputs.zeromount == 'true'
+        run: |
+          cd "$COMMON"
+          cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
+          cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
+          cp "$ZEROMOUNT/${{ inputs.android_version }}-${{ inputs.kernel_version }}/Wild_KSU/patches/"* .
+
+          #Prepare open.c for susfs patching
+          sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+
+          #Prepare namespace.c for susfs patching
+          sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
+            /#ifdef CONFIG_KDP_NS/,/#endif/ {
+              /#else/,/#endif/!d
+              /#else/d
+              /#endif/d
+            }
+          }' fs/namespace.c
+
+          patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 < 51_enhanced_susfs_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 < 60_zeromount-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 < 70_ksu_safety-wksu-${{ inputs.kernel_version }}.patch || true
+
+          if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
+           echo "Directory exists, applying fixes"
+           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"*.patch ./
+
+           # Fix SUSFS rejects
+           for p in *.patch; do
+            patch -p1 < "$p"
+            rm -f "$p"
+           done
+          else
+           echo "No directory found, skipping"
+          fi
+
+          cd "$GITHUB_WORKSPACE"
+          cat >> "$DEFCONFIG" << 'EOF'
+          # SUSFS Configuration
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT_REDIRECT=y
+          CONFIG_KSU_SUSFS_SUS_MAP=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_UNICODE_FILTER=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+          EOF
+
           
       - name: Fix WiFi and Bluetooth on Samsung 6.6 GKI devices
         if: ${{ inputs.kernel_version == '6.6' }}
