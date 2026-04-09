@@ -75,7 +75,7 @@ jobs:
           git clone https://github.com/WildKernels/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
           git clone https://github.com/WildKernels/kernel_patches.git
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
-          git clone https://github.com/Enginex0/Super-Builders.git
+          git clone https://github.com/jimsterino98/Super-Builders.git
       
       - name: Clone Kernel Source
         run: |
