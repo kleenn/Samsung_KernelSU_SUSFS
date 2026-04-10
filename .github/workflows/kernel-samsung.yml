@@ -19,6 +19,9 @@ on:
       zeromount:
         required: true
         type: string
+      wksu:
+        required: true
+        type: string
 
 jobs:
   build-kernels-a12:
@@ -95,4 +98,5 @@ jobs:
       bbg: ${{ inputs.bbg }}
       unicodefix: ${{ inputs.unicodefix }}
       zeromount: ${{ inputs.zeromount }}
+      wksu: ${{ inputs.wksu }}
 
