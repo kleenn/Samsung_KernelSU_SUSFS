@@ -282,7 +282,7 @@ jobs:
           fi
 
           if [ -f fs/stat.c.rej ]; then
-          echo "Applying zeromount vfs_statx fix..."
+          echo "fixing stat.c."
 
             if ! grep -q 'zeromount_stat_hook(dfd, filename, stat, request_mask, flags)' fs/stat.c; then
               perl -0pi -e 's@(static int vfs_statx\(.*?\)\s*\{.*?orig_flow:\n#endif\n)@$1\n#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n\n@s' fs/stat.c
@@ -290,11 +290,11 @@ jobs:
           fi
 
           if [ -f fs/Kconfig.rej ]; then
-              echo "Applying Kconfig zeromount fix..."
+            echo "Applying Kconfig zeromount fix..."
 
-              if ! grep -q 'config ZEROMOUNT' fs/Kconfig; then
-                perl -0pi -e 's@(config IO_WQ.*?\n(?:\t.*\n)*?)@\1\nconfig ZEROMOUNT\n\tbool "Enable zeromount"\n\tdefault n\n\n@s' fs/Kconfig
-              fi
+            if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
+                perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  ZeroMount allows path redirection and virtual file injection\n\t  without mounting filesystems. Useful for systemless modifications.\n\n@' fs/Kconfig
+            fi
           fi
           #patch -p1 < 70_ksu_safety-wksu-${{ inputs.kernel_version }}.patch || true
 
