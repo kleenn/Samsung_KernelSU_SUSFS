@@ -85,7 +85,7 @@ jobs:
           KERNEL_PATCHES="$ROOT/kernel_patches"
           ANYKERNEL3="$ROOT/AnyKernel3"
           ZEROMOUNT="$ROOT/Super-Builders"
-          if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then  
+          if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8"]]; then  
             COMMON="$CONFIG"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             COMMON="$CONFIG/kernel-6.6"
@@ -95,9 +95,9 @@ jobs:
             COMMON="$CONFIG/kernel_platform/common"
           fi
 
-          if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" ]]; then
+          if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
             DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnaxx_defconfig"
-          elif [[ "${{ inputs.branch }}" == "SM-A546E-Oneui7" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" ]]; then
             DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnsxx_defconfig"
           elif [[ "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
             DEFCONFIG="$COMMON/arch/arm64/configs/s5e8535-m14xnsxx_defconfig"
@@ -469,7 +469,7 @@ jobs:
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
             chmod +x build_kernel_GKI.sh
             LTO=thin ./build_kernel_GKI.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
             sudo apt update
             sudo apt-get install -y libyaml-dev
             LTO=thin ./build_kernel.sh || true
@@ -509,7 +509,7 @@ jobs:
             cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
             cp ./out/msm-kalama-kalama-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
             cp ./arch/arm64/boot/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             cp ./kernel-6.6/out/arch/arm64/boot/Image "$ANYKERNEL3/Image"
