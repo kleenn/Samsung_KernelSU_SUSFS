@@ -27,6 +27,9 @@ on:
       zeromount:
         required: true
         type: string
+      wksu:
+        required: true
+        type: string
 
 jobs:
   build-samsung-gki:
@@ -121,6 +124,7 @@ jobs:
           done
 
       - name: Add Wild_KSU
+        if: inputs.wksu == 'true'
         run: |
           cd "$COMMON"
           curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary
@@ -132,6 +136,7 @@ jobs:
           EOF
 
       - name: Getting Wild_KSU Version
+        if: inputs.wksu == 'true'
         run: |
           cd "$COMMON/Wild_KSU/kernel"
           
@@ -336,6 +341,7 @@ jobs:
           fi
 
       - name: Set Kernel Configuration Variables
+        if: inputs.wksu == 'true'
         run: |
           
           echo "Initializing kernel configuration..."
@@ -419,13 +425,15 @@ jobs:
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Change Kernel Name
+      - name: Change Kernel Name and remove protected exports
         run: |
           cd "$COMMON"
-          #Add Wild to Kernel Version
-          sed -i '$s|echo "\$res"|echo "\$res-Wild"|' ./scripts/setlocalversion
-          #Set Kernel Timestamp
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          if [[ "${{ inputs.wksu }}" == "true" ]]; then
+            #Add Wild to Kernel Version
+            sed -i '$s|echo "\$res"|echo "\$res-Wild"|' ./scripts/setlocalversion
+            #Set Kernel Timestamp
+            perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
+          fi
           
           #Remove Abi Exports and Error
           rm -rf ./android/abi_gki_protected_exports_*
@@ -437,6 +445,7 @@ jobs:
           sed -i 's/-dirty//' "./$COMMON/scripts/setlocalversion"
           
       - name: Set file name
+        if: inputs.wksu == 'true'
         run: |
           ARTIFACT_BASE="${{ inputs.branch }}-${{ inputs.kernel_version }}-${{ inputs.android_version }}"
           
