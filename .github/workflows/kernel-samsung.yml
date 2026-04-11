@@ -22,6 +22,9 @@ on:
       wksu:
         required: true
         type: string
+      droidspace:
+        required: true
+        type: string
 
 jobs:
   build-kernels-a12:
@@ -108,4 +111,5 @@ jobs:
       unicodefix: ${{ inputs.unicodefix }}
       zeromount: ${{ inputs.zeromount }}
       wksu: ${{ inputs.wksu }}
+      droidspace: ${{ inputs.droidspace }}
 
