@@ -88,7 +88,7 @@ jobs:
           KERNEL_PATCHES="$ROOT/kernel_patches"
           ANYKERNEL3="$ROOT/AnyKernel3"
           ZEROMOUNT="$ROOT/Super-Builders"
-          if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then  
+          if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then  
             COMMON="$CONFIG"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             COMMON="$CONFIG/kernel-6.6"
@@ -376,7 +376,7 @@ jobs:
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
           echo "nothing needs to be done"
                     
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
+          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
           cat >> "$DEFCONFIG" << 'EOF'
           # nuke root protection
           CONFIG_UH=n
@@ -481,13 +481,13 @@ jobs:
           set -x
           cd "$CONFIG"
           echo "Building the kernel..."
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit5" || "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
+          if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             ./build_kernel_GKI.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             LTO=thin ./build_kernel_GKI.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
+          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
             sudo apt update
             sudo apt-get install -y libyaml-dev
             LTO=thin ./build_kernel.sh || true
@@ -521,7 +521,7 @@ jobs:
             cp ./kernel_platform/sec/dist/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" ]]; then
             cp ./out/msm-pineapple-pineapple-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
             cp ./kernel_platform/gki/dist/Image "$ANYKERNEL3/Image"
           elif [[ -f ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ]]; then
             cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image "$ANYKERNEL3/Image"
