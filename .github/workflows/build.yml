@@ -30,6 +30,9 @@ on:
       wksu:
         required: true
         type: string
+      droidspace:
+        required: true
+        type: string
 
 jobs:
   build-samsung-gki:
@@ -225,8 +228,10 @@ jobs:
           fi
           
           cd "$GITHUB_WORKSPACE"
-          echo "# SUSFS Configuration" >> "$DEFCONFIG"
-          echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+          cat >> "$DEFCONFIG" << 'EOF'
+          # SUSFS Configuration
+          CONFIG_KSU_SUSFS=y
+          EOF
           
           if [[ ${{ inputs.zeromount }} == 'true' ]]; then
 
@@ -338,6 +343,20 @@ jobs:
            patch -p1 < unicode_bypass_fix_6.1-.patch
           fi
 
+      - name: Add droidspace support
+        if: inputs.droidspace == 'true'
+        run: |  
+          cd "$COMMON"
+          # ABI: use ABI padding for SYSVIPC This commit allows us to enable CONFIG_SYSVIPC in defconfig without breaking kernel ABI
+          curl -Ls https://github.com/nullptr-t-oss/android_kernel_common_oneplus_sm8550/commit/769a5cfdc17b98d8e0bd491d45f5651180e42196.patch | patch -p1 --forward
+
+          cat >> "$DEFCONFIG" <<EOF
+          CONFIG_SYSVIPC=y
+          CONFIG_DEVTMPFS=y
+          CONFIG_PID_NS=y
+          CONFIG_POSIX_MQUEUE=y
+          EOF
+          
       - name: Set Kernel Configuration Variables
         if: inputs.wksu == 'true'
         run: |
