@@ -236,7 +236,8 @@ jobs:
           if [[ ${{ inputs.zeromount }} == 'true' ]]; then
 
             echo "adding zeromount..."
-          
+            
+            cd "$COMMON"
             cp "$ZEROMOUNT/${{ inputs.android_version }}-${{ inputs.kernel_version }}/WildKSU/patches/60_zeromount-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" .
             #patch -p1 < 51_enhanced_susfs_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
             patch -p1 < 60_zeromount-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
