@@ -223,13 +223,10 @@ jobs:
           else
            echo "No directory found, skipping"
           fi
-
-          cd "$GITHUB_WORKSPACE"
-          cat >> "$DEFCONFIG" << 'EOF'
-          # SUSFS Configuration
-          CONFIG_KSU_SUSFS=y
-          EOF
-
+          
+          echo "# SUSFS Configuration" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+          
           if [[ ${{ inputs.zeromount }} == 'true' ]]; then
 
             echo "adding zeromount..."
