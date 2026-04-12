@@ -71,6 +71,15 @@ on:
           - no
         default: no
 
+      crc:
+        description: "disable CRC?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
 jobs:
 
   build-samsung:
@@ -83,6 +92,7 @@ jobs:
       zeromount: ${{ inputs.zeromount }}
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
+      crc: ${{ inputs.crc }}
 
   release:
     runs-on: ubuntu-latest
