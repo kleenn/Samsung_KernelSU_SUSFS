@@ -33,6 +33,9 @@ on:
       droidspace:
         required: true
         type: string
+      crc:
+        required: true
+        type: string
 
 jobs:
   build-samsung-gki:
@@ -217,6 +220,10 @@ jobs:
           if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
            echo "Directory exists, applying fixes"
            cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"*.patch ./
+             
+             if [ "${{ inputs.crc }}" == "false" ]; then
+               rm -rf Disable_CRC.patch
+             fi
 
            # Fix SUSFS rejects
            for p in *.patch; do
@@ -312,18 +319,23 @@ jobs:
           echo "CONFIG_BBG=y" >> arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
-          if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg" ]; then
-           echo "Directory exists, adding bbg in configLSM"
-           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg/"* ./
+          cd "$GITHUB_WORKSPACE"
+          sed -i '/^CONFIG_LSM=/ {
+          /baseband_guard/! s/"\([^"]*\)"/"baseband_guard,\1"/
+          }' "$DEFCONFIG"
 
-           # patch for adding bbg in configLSM for some devices 
-           for p in *.patch; do
-            patch -p1 < "$p"
-            rm -f "$p"
-           done
-          else
-           echo "BBG already enabled"
-          fi
+#          if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg" ]; then
+#           echo "Directory exists, adding bbg in configLSM"
+#           cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/bbg/"* ./
+
+#           # patch for adding bbg in configLSM for some devices 
+#           for p in *.patch; do
+#            patch -p1 < "$p"
+#            rm -f "$p"
+#           done
+#          else
+#           echo "BBG already enabled"
+#          fi
 
 #          if grep -qxF $'\t\tconst char* symlink_target_link = inode->i_op->get_link(dentry, inode, NULL);' ./Baseband-guard/baseband_guard.c; then
 #           echo "Applying BBG get_link fix"
@@ -375,34 +387,6 @@ jobs:
 
           if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
           echo "nothing needs to be done"
-                    
-          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
-          cat >> "$DEFCONFIG" << 'EOF'
-          # nuke root protection
-          CONFIG_UH=n
-          CONFIG_UH_RKP=n
-          CONFIG_UH_LKMAUTH=n
-          CONFIG_UH_LKM_BLOCK=n
-          CONFIG_RKP_CFP_JOPP=n
-          CONFIG_RKP_CFP=n
-          CONFIG_SECURITY_DEFEX=n
-          CONFIG_PROCA=n
-          CONFIG_FIVE=n
-          CONFIG_RKP=n
-          CONFIG_KDP_NS=n
-          CONFIG_KDP=n
-                              
-          #Force Load Kernel Modules
-          CONFIG_MODULES=y
-          CONFIG_MODULE_FORCE_LOAD=y
-          CONFIG_MODULE_UNLOAD=y
-          CONFIG_MODULE_FORCE_UNLOAD=y
-          CONFIG_MODVERSIONS=y
-          CONFIG_MODULE_SRCVERSION_ALL=n
-          CONFIG_MODULE_SIG=n
-          CONFIG_MODULE_COMPRESS=n
-          CONFIG_TRIM_UNUSED_KSYMS=n
-          EOF
            
           elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
           cat >> "$COMMON/arch/arm64/configs/s5e9945-bazel_defconfig" << 'EOF'
@@ -442,6 +426,26 @@ jobs:
           cd "$COMMON"
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./build.config.gki
+
+      - name: Force load module configs
+        if: inputs.crc == 'true'
+        run: |
+          if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
+          cat >> "$DEFCONFIG" << 'EOF'
+          #Force Load Kernel Modules
+          CONFIG_MODULES=y
+          CONFIG_MODULE_FORCE_LOAD=y
+          CONFIG_MODULE_UNLOAD=y
+          CONFIG_MODULE_FORCE_UNLOAD=y
+          CONFIG_MODVERSIONS=y
+          CONFIG_MODULE_SRCVERSION_ALL=n
+          CONFIG_MODULE_SIG=n
+          CONFIG_MODULE_COMPRESS=n
+          CONFIG_TRIM_UNUSED_KSYMS=n
+          EOF
+          else
+            echo "kernel_platform devices don't need these, so moving on"
+          fi
 
       - name: Change Kernel Name and remove protected exports
         run: |
