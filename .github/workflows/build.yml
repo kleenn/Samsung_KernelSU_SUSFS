@@ -367,6 +367,7 @@ jobs:
           # ABI: use ABI padding for SYSVIPC This commit allows us to enable CONFIG_SYSVIPC in defconfig without breaking kernel ABI
           curl -Ls https://github.com/nullptr-t-oss/android_kernel_common_oneplus_sm8550/commit/769a5cfdc17b98d8e0bd491d45f5651180e42196.patch | patch -p1 --forward
 
+          cd "$GITHUB_WORKSPACE"
           cat >> "$DEFCONFIG" <<EOF
           CONFIG_SYSVIPC=y
           CONFIG_DEVTMPFS=y
