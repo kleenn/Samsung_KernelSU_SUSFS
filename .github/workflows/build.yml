@@ -472,6 +472,7 @@ jobs:
              rm -f "$p"
             else
              echo "$p failed, skipping patch"
+            fi
           done
 
           echo "Kernel Optimized, hehe"
