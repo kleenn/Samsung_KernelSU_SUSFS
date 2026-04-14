@@ -69,10 +69,19 @@ on:
         options:
           - yes
           - no
-        default: no
+        default: yes
 
       ntsync:
         description: "add ntsync?"
+        required: true
+        type: choice
+        options:
+          - yes
+          - no
+        default: yes
+
+      optimizations:
+        description: "add optimizations from kernel patches repo?"
         required: true
         type: choice
         options:
@@ -94,6 +103,7 @@ jobs:
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
       release_type: ${{ inputs.release_type }}
+      optimizations: ${{ inputs.optimizations }}
 
   release:
     runs-on: ubuntu-latest
