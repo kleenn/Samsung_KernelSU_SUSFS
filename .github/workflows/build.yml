@@ -501,7 +501,8 @@ jobs:
           cp "$KERNEL_PATCHES/common/ntsync/ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" .
           patch -p1 < ntsync_base.patch || true
           patch -p1 < ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
-          
+
+          cd "$GITHUB_WORKSPACE"
           cat >> "$GKI_DEFCONFIG" << 'EOF'
           CONFIG_NTSYNC=y
           EOF
