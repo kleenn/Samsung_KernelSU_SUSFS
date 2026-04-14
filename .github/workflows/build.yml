@@ -102,15 +102,15 @@ jobs:
           fi
 
           if [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
-            DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnaxx_defconfig"
+            GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnaxx_defconfig"
           elif [[ "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" ]]; then
-            DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnsxx_defconfig"
+            GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnsxx_defconfig"
           elif [[ "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
-            DEFCONFIG="$COMMON/arch/arm64/configs/s5e8535-m14xnsxx_defconfig"
+            GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8535-m14xnsxx_defconfig"
           else
             GKI_DEFCONFIG="$COMMON/arch/arm64/configs/gki_defconfig"
             DEFCONFIG="$COMMON/arch/arm64/configs/defconfig"
-            echo "GKI_DEFCONFIG=$GKI_DEFCONFIG" >> $GITHUB_ENV
+            echo "DEFCONFIG=$DEFCONFIG" >> $GITHUB_ENV
           fi
 
           echo "ROOT=$ROOT" >> $GITHUB_ENV
@@ -118,7 +118,7 @@ jobs:
           echo "KERNEL_PATCHES=$KERNEL_PATCHES" >> $GITHUB_ENV
           echo "ANYKERNEL3=$ANYKERNEL3" >> $GITHUB_ENV
           echo "COMMON=$COMMON" >> $GITHUB_ENV
-          echo "DEFCONFIG=$DEFCONFIG" >> $GITHUB_ENV
+          echo "GKI_DEFCONFIG=$GKI_DEFCONFIG" >> $GITHUB_ENV
           echo "ZEROMOUNT=$ZEROMOUNT" >> $GITHUB_ENV
           
       - name: Extract all tar.xz files and delete them
