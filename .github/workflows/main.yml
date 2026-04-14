@@ -103,6 +103,7 @@ jobs:
       droidspace: ${{ inputs.droidspace }}
       logs: ${{ inputs.logs }}
       ntsync: ${{ inputs.ntsync }}
+      release_type: ${{ inputs.release_type }}
 
   release:
     runs-on: ubuntu-latest
