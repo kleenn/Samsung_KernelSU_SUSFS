@@ -466,8 +466,12 @@ jobs:
           rm -rf IPv6_NAT_FIX.patch
 
           for p in *.patch; do
+            if patch -p1 --dry-run <"$p">
+             echo "patch is OK, applying $p"
              patch -p1 < "$p"
-              rm -f "$p"
+             rm -f "$p"
+            else
+             echo "$p failed, skipping patch"
           done
 
           echo "Kernel Optimized, hehe"
