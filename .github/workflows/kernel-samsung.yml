@@ -28,6 +28,9 @@ on:
       logs:
         required: true
         type: string
+      ntsync:
+        required: true
+        type: string
 
 jobs:
   build-kernels-a12:
@@ -122,4 +125,5 @@ jobs:
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
       logs: ${{ inputs.logs }}
+      ntsync: ${{ inputs.ntsync }}
 
