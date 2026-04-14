@@ -36,6 +36,9 @@ on:
       logs:
         required: true
         type: string
+      ntsync:
+        required: true
+        type: string
 
 jobs:
   build-samsung-gki:
@@ -487,6 +490,20 @@ jobs:
           CONFIG_THERMAL_EMULATION=n
           CONFIG_PRINTK_TIME=n
           CONFIG_MAGIC_SYSRQ=n
+          EOF
+
+      - name: Add ntsync
+        if: inputs.ntsync == 'true'
+        run: |
+          cd "$COMMON"
+          echo "applying ntsync patches"
+          cp "$KERNEL_PATCHES/common/ntsync/ntsync_base.patch" .
+          cp "$KERNEL_PATCHES/common/ntsync/ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" .
+          patch -p1 < ntsync_base.patch || true
+          patch -p1 < ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+          
+          cat >> "$DEFCONFIG" << 'EOF'
+          CONFIG_NTSYNC=y
           EOF
 
       - name: Change Kernel Name and remove protected exports
