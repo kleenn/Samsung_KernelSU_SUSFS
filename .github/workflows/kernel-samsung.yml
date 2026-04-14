@@ -25,7 +25,7 @@ on:
       droidspace:
         required: true
         type: string
-      crc:
+      logs:
         required: true
         type: string
 
@@ -118,5 +118,5 @@ jobs:
       zeromount: ${{ inputs.zeromount }}
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
-      crc: ${{ inputs.crc }}
+      logs: ${{ inputs.logs }}
 
