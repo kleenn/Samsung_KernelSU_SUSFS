@@ -202,7 +202,7 @@ jobs:
           SUSFS_VERSION="v2.1.0"
           
           # Apply SUSFS to KernelSU-Next
-          cp "$SUSFS4KSU/kernel_patches/10_enable_susfs_for_ksu.patch .
+          cp "$SUSFS4KSU/kernel_patches/10_enable_susfs_for_ksu.patch" .
           patch -p1 10_enable_susfs_for_ksu.patch
           rm -rf 10_enable_susfs_for_ksu.patch
 
