@@ -97,7 +97,7 @@ jobs:
           KERNEL_PATCHES="$ROOT/kernel_patches"
           ANYKERNEL3="$ROOT/AnyKernel3"
           ZEROMOUNT="$ROOT/Super-Builders"
-          if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then  
+          if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then  
             COMMON="$CONFIG"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             COMMON="$CONFIG/kernel-6.6"
@@ -113,10 +113,10 @@ jobs:
             GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-a54xnsxx_defconfig"
           elif [[ "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
             GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8535-m14xnsxx_defconfig"
+          elif [[ "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
+            GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e9925-b0sxxx_defconfig"
           else
             GKI_DEFCONFIG="$COMMON/arch/arm64/configs/gki_defconfig"
-            DEFCONFIG="$COMMON/arch/arm64/configs/defconfig"
-            echo "DEFCONFIG=$DEFCONFIG" >> $GITHUB_ENV
           fi
 
           echo "ROOT=$ROOT" >> $GITHUB_ENV
@@ -477,46 +477,6 @@ jobs:
 
           echo "Kernel Optimized, hehe"
 
-      - name: Disable logs and debugging for release kernel
-        if: inputs.release_type == 'Release'
-        run: |
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          CONFIG_PROFILING=n
-          CONFIG_THERMAL_EMULATION=n
-          CONFIG_PRINTK_TIME=n
-          CONFIG_MAGIC_SYSRQ=n
-          CONFIG_PM_DEBUG=n
-          CONFIG_PM_ADVANCED_DEBUG=n
-          CONFIG_CMA_DEBUGFS=n
-          CONFIG_USB_DEBUG_DETAILED_LOG=n
-          CONFIG_THERMAL_STATISTICS=n
-          CONFIG_DMABUF_SYSFS_STATS=n
-          CONFIG_ANDROID_DEBUG_SYMBOLS=n
-          CONFIG_ANDROID_DEBUG_KINFO=n
-          CONFIG_TRACE_MMIO_ACCESS=n
-          CONFIG_PRINTK_CALLER=n
-          CONFIG_DYNAMIC_DEBUG_CORE=n
-          CONFIG_UBSAN=n
-          CONFIG_PAGE_OWNER=n
-          CONFIG_PAGE_PINNER=n
-          CONFIG_PER_VMA_LOCK_STATS=n
-          CONFIG_DEBUG_MEMORY_INIT=n
-          CONFIG_KASAN=n
-          CONFIG_KASAN_HW_TAGS=n
-          CONFIG_KFENCE=n
-          CONFIG_SCHEDSTATS=n
-          CONFIG_HIST_TRIGGERS=n
-          CONFIG_KUNIT=n
-          CONFIG_KUNIT_DEBUGFS=n
-          EOF
-
-#          cat >> "$DEFCONFIG" << 'EOF'
-#          CONFIG_PROFILING=n
-#          CONFIG_THERMAL_EMULATION=n
-#          CONFIG_PRINTK_TIME=n
-#          CONFIG_MAGIC_SYSRQ=n
-#          EOF
-
       - name: Add ntsync
         if: inputs.ntsync == 'true'
         run: |
@@ -576,7 +536,7 @@ jobs:
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
             LTO=thin ./build_kernel_GKI.sh || true
-          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" ]]; then
+          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
             sudo apt update
             sudo apt-get install -y libyaml-dev
             LTO=thin ./build_kernel.sh || true
@@ -618,7 +578,7 @@ jobs:
             cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
             cp ./out/msm-kalama-kalama-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-A546B-Oneui7" || "${{ inputs.branch }}" == "SM-A546E-Oneui7" || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-A546E-Oneui8" || "${{ inputs.branch }}" == "SM-A546B-Oneui8" ]]; then
+          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
             cp ./arch/arm64/boot/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             cp ./kernel-6.6/out/arch/arm64/boot/Image "$ANYKERNEL3/Image"
