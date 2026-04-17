@@ -102,7 +102,6 @@ jobs:
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
-      release_type: ${{ inputs.release_type }}
       optimizations: ${{ inputs.optimizations }}
 
   release:
@@ -164,19 +163,52 @@ jobs:
           Please ensure you have proper backups before installation.
 
           Features:
-          -> Wild KSU v3.1.2
-          -> SUSFS ඞ v2.1.0
-          -> SUSFS Inline hooks
-          -> BBG: https://github.com/vc-teahouse/Baseband-guard
-          -> unicode fix
+          EOF
 
-          🔹 BBG (Baseband-guard)
-          - A lightweight LSM (Linux Security Module) for Android kernel
-          - Blocks unauthorized writes to critical partitions/device nodes
-          - Prevents malicious tampering with baseband and boot chain
-          - Kernel-level protection via LSM hooks
-          - Reduces risk of soft-brick/hard-brick issues
+          if [ "${{ inputs.wksu }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> Wild KSU v3.1.2
+            EOF
+          fi
 
+          if [ "${{ inputs.susfs }}" = "true" ]; then
+              cat <<'EOF' >> release_body.md
+            -> SUSFS ඞ v2.1.0
+            -> SUSFS Inline hooks
+            EOF
+          fi
+
+          if [ "${{ inputs.bbg }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> BBG: https://github.com/vc-teahouse/Baseband-guard
+            EOF
+          fi
+
+          if [ "${{ inputs.unicodefix }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> unicode fix
+            EOF
+          fi
+
+          if [ "${{ inputs.zeromount }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> Zeromount https://github.com/Enginex0/zeromount
+            EOF
+          fi
+
+          if [ "${{ inputs.droidspace }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> droidspaces support https://github.com/ravindu644/Droidspaces-OSS
+            EOF
+          fi
+
+          if [ "${{ inputs.ntsync }}" = "true" ]; then
+            cat <<'EOF' >> release_body.md
+            -> ntsync
+            EOF
+          fi
+
+          cat <<'EOF' >> release_body.md
           Notes:
           - The only modifications to Samsung Kernels at this time are WKSU and SUSFS. Everything else is left at default settings.
           - Currently no support for KernelPatch-Next for the time being.
