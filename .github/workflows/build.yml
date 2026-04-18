@@ -207,7 +207,7 @@ jobs:
           rm -rf 10_enable_susfs_for_ksu.patch
 
           #Fix rejects from adding susfs to KSUN
-          cp "$KERNEL_PATCHES/wild/ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch .
+          cp "$KERNEL_PATCHES/wild/ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch" .
           patch -p1 < ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch
           rm -rf ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch
            
