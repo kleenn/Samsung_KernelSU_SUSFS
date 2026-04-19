@@ -82,6 +82,18 @@ jobs:
           git clone https://github.com/WildKernels/kernel_patches.git
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/jimsterino98/Super-Builders.git
+
+          cd susfs4ksu
+          if [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android12-5.10" ]]; then
+            COMMIT=674f72b6f683e837d7f557704cabe00a83eeb0b4
+          elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android13-5.15" ]]; then
+            COMMIT=eaa5d299dd85a4230f936b94dc5dd8303f27130a
+          elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android14-6.1" ]]; then
+            COMMIT=971cc4e770b7f344a4df35ce92d7a859e6a1e0fd
+          elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android15-6.6" ]]; then
+            COMMIT=85bcfac5edc8ba7808581e8d0a3ca9c7deca78e4
+          fi
+          git checkout "$COMMIT"
       
       - name: Clone Kernel Source
         run: |
@@ -96,7 +108,7 @@ jobs:
           ZEROMOUNT="$ROOT/Super-Builders"
           if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then  
             COMMON="$CONFIG"
-          elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
+          elif [[ "${{ inputs.branch }}" == "SM-A566B" || ${{ inputs.branch }} == SM-A055* ]]; then
             COMMON="$CONFIG/kernel-6.6"
           elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" || ${{ inputs.branch }} == SM-A556* ]]; then
             COMMON="$CONFIG/kernel"
@@ -139,6 +151,9 @@ jobs:
         run: |
           cd "$COMMON"
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+
+          cd KernelSU-Next
+          git checkout 551ad80473f60e052917aec08abf5323b6ab2f7c
 
           cd "$GITHUB_WORKSPACE"
           cat >> "$GKI_DEFCONFIG" << 'EOF'
@@ -202,14 +217,19 @@ jobs:
           SUSFS_VERSION="v2.1.0"
           
           # Apply SUSFS to KernelSU-Next
-          #cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
-          #patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          #rm -rf 10_enable_susfs_for_ksu.patch
+          cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
+          patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          rm -rf 10_enable_susfs_for_ksu.patch
 
           #Fix rejects from adding susfs to KSUN
-          cp "$KERNEL_PATCHES/wild/ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch" .
-          patch -p1 < ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch
-          rm -rf ksun-0daf55582-susfs-v2.1.0-e259e7d6.patch
+          cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch .
+          rm -rf multi_manager.patch
+          rm -rf multi_sepolicy_fix.patch
+          for p in *.patch; do
+             patch -p1 < "$p"
+              rm -f "$p"
+          done
+          
            
           # Apply SUSFS to kernel
 
@@ -582,6 +602,9 @@ jobs:
             tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e9945:s5e9945_user_dist
           elif [[ ${{ inputs.branch }} == SM-A556* ]]; then
             tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e8845:s5e8845_user_dist
+          elif [[ ${{ inputs.branch }} == SM-A055* ]]; then
+            chmod +x build_kernel.sh
+            ./build_kernel.sh
           else
             #temporarily using this until i can figure out the other phones build script issues
             cd kernel_platform
@@ -621,6 +644,8 @@ jobs:
             cp ./out/s5e8845_user/dist/Image "$ANYKERNEL3/Image"
           elif [[ "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" ]]; then
             cp ./out/msm-waipio-waipio-gki/dist/Image "$ANYKERNEL3/Image"
+          elif [[ ${{ inputs.branch }} == SM-A055* ]]; then
+            cp ./out/target/product/a05m/obj/KLEAF_OBJ/dist/kernel_device_modules-6.6/mgk_64_k66_kernel_aarch64.user/Image.gz "$ANYKERNEL3/Image.gz"
           else
             echo "Error: Image file not found in any expected location"
             exit 1
