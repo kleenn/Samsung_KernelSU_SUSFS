@@ -196,13 +196,6 @@ jobs:
      #     sed -i "s/KSU_VERSION_TAG_FALLBACK := .*/KSU_VERSION_TAG_FALLBACK := ${KSU_GIT_TAG}/" "$KBUILD"
 
       #    echo "✅ Updated fallback values in $KBUILD"
-
-      - name: Download susfs and kernel patches
-        if: inputs.susfs == 'true'
-        uses: ./.github/actions/susfs-clone
-        with:
-          android_version: ${{ inputs.android_version }}
-          kernel_version: ${{ inputs.kernel_version }}
           
       - name: Apply SUSFS Patches
         if: inputs.susfs == 'true'
@@ -226,308 +219,56 @@ jobs:
 
       - name: Add BBG
         if: inputs.bbg == 'true'
-        run: |          
-          cd "$COMMON"
-          echo "Adding BBG..."
-          curl -LSs https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-          echo "CONFIG_BBG=y" >> arch/arm64/configs/gki_defconfig
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
-
-          cd "$GITHUB_WORKSPACE"
-          sed -i '/^CONFIG_LSM=/ s/"$/,baseband_guard"/' "$GKI_DEFCONFIG"
+        uses: ./.github/actions/bbg
 
       - name: temp fix for m55 bootloop maybe
         if: inputs.branch == 'SM-M556B-Oneui8'
-        run: |   
-          cd "$COMMON"
-
-          curl -L -s https://raw.githubusercontent.com/jimsterino98/Android-Kernel-Tutorials/refs/heads/main/patches/010.Disable-CRC-Checks.patch | patch -p1 --forward
-
-          cd "$GITHUB_WORKSPACE"
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          #Force Load Kernel Modules
-          CONFIG_MODULES=y
-          CONFIG_MODULE_FORCE_LOAD=y
-          CONFIG_MODULE_UNLOAD=y
-          CONFIG_MODULE_FORCE_UNLOAD=y
-          CONFIG_MODVERSIONS=y
-          CONFIG_MODULE_SRCVERSION_ALL=n
-          CONFIG_MODULE_SIG=n
-          CONFIG_MODULE_COMPRESS=n
-          CONFIG_TRIM_UNUSED_KSYMS=n
-          
-          #Add btrfs user request
-          CONFIG_BTRFS_FS=y
-          EOF
+        uses: ./.github/actions/m55-fix
 
       - name: Add unicodefix
         if: inputs.unicodefix == 'true'
-        run: |  
-          cd "$COMMON"
-          echo "detected kernel version: ${{ inputs.kernel_version }}"
-
-          if [[ ${{ inputs.kernel_version }} == 6.* ]]; then
-           cp "$KERNEL_PATCHES/common/unicode_bypass_fix_6.1+.patch" .
-           patch -p1 < unicode_bypass_fix_6.1+.patch
-          else
-           cp "$KERNEL_PATCHES/common/unicode_bypass_fix_6.1-.patch" .
-           patch -p1 < unicode_bypass_fix_6.1-.patch
-          fi
+        uses: ./.github/actions/unicode
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
 
       - name: Add droidspace support
         if: inputs.droidspace == 'true'
-        run: |  
-          cd "$COMMON"
-          # ABI: use ABI padding for SYSVIPC This commit allows us to enable CONFIG_SYSVIPC in defconfig without breaking kernel ABI
-          curl -Ls https://github.com/nullptr-t-oss/android_kernel_common_oneplus_sm8550/commit/769a5cfdc17b98d8e0bd491d45f5651180e42196.patch | patch -p1 --forward
-
-          cd "$GITHUB_WORKSPACE"
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          # IPC
-          CONFIG_SYSVIPC=y
-          CONFIG_POSIX_MQUEUE=y
-
-          # Namespaces
-          CONFIG_IPC_NC=y
-          CONFIG_PID_NS=y
-
-          # HW Access Support
-          CONFIG_DEVTMPFS=y
-
-          # Below configs are optional
-
-          # Docker NAT
-          CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
-
-          # UFW
-          CONFIG_NETFILTER_XT_TARGET_REJECT=y
-          CONFIG_NETFILTER_XT_TARGET_LOG=y
-          CONFIG_NETFILTER_XT_MATCH_RECENT
-
-          # Fail2Ban
-          CONFIG_IP_SET=y
-          CONFIG_IP_SET_HASH_IP=y
-          CONFIG_IP_SET_HASH_NET=y
-          CONFIG_NETFILTER_XT_SET=y
-          EOF
+        uses: ./.github/actions/droidspaces
           
       - name: Set Kernel Configuration Variables
         if: inputs.wksu == 'true'
-        run: |
-          
-          echo "Initializing kernel configuration..."
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          # Mountify Support
-          CONFIG_OVERLAY_FS=y
-          CONFIG_TMPFS_XATTR=y
-          CONFIG_TMPFS_POSIX_ACL=y
-
-          # increase log buffer size to show bbg version in wksu homepage
-          CONFIG_LOG_BUF_SHIFT=20
-          EOF
-
-          if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
-          echo "nothing to see here moving on"
-          
-          elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
-          cat >> "$COMMON/arch/arm64/configs/s5e9945-bazel_defconfig" << 'EOF'
-          # nuke root protection
-          CONFIG_UH=n
-          CONFIG_UH_RKP=n
-          CONFIG_UH_LKMAUTH=n
-          CONFIG_UH_LKM_BLOCK=n
-          CONFIG_RKP_CFP_JOPP=n
-          CONFIG_RKP_CFP=n
-          CONFIG_SECURITY_DEFEX=n
-          CONFIG_PROCA=n
-          CONFIG_FIVE=n
-          CONFIG_RKP=n
-          CONFIG_KDP_NS=n
-          CONFIG_KDP=n
-          EOF
-
-          elif [[ ${{ inputs.branch }} == SM-A556* ]]; then
-          cat >> "$COMMON/arch/arm64/configs/s5e8845-bazel_defconfig" << 'EOF'
-          # nuke root protection
-          CONFIG_UH=n
-          CONFIG_UH_RKP=n
-          CONFIG_UH_LKMAUTH=n
-          CONFIG_UH_LKM_BLOCK=n
-          CONFIG_RKP_CFP_JOPP=n
-          CONFIG_RKP_CFP=n
-          CONFIG_SECURITY_DEFEX=n
-          CONFIG_PROCA=n
-          CONFIG_FIVE=n
-          CONFIG_RKP=n
-          CONFIG_KDP_NS=n
-          CONFIG_KDP=n
-          EOF
-
-          else
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          # nuke root protection
-          CONFIG_UH=n
-          CONFIG_UH_RKP=n
-          CONFIG_UH_LKMAUTH=n
-          CONFIG_UH_LKM_BLOCK=n
-          CONFIG_RKP_CFP_JOPP=n
-          CONFIG_RKP_CFP=n
-          CONFIG_SECURITY_DEFEX=n
-          CONFIG_PROCA=n
-          CONFIG_FIVE=n
-          CONFIG_RKP=n  
-          CONFIG_KDP_NS=n
-          CONFIG_KDP=n
-          EOF
-          fi
-          
-          cd "$COMMON"
-          # Remove check_defconfig
-          sed -i 's/check_defconfig//' ./build.config.gki
-
-      - name: Add optimizations from kernel patches/common
-        if: inputs.optimizations == 'true'
-        run: |
-          cd "$COMMON"
-          echo "Optimizing Kernel..."
-          cp "$KERNEL_PATCHES/common/"*.patch ./
-          rm -rf unicode_bypass_fix_6.1+.patch
-          rm -rf unicode_bypass_fix_6.1-.patch
-          rm -rf IPv6_NAT_FIX.patch
-
-          for p in *.patch; do
-            if patch -p1 --dry-run < "$p"; then
-             echo "patch is OK, applying $p"
-             patch -p1 < "$p"
-             rm -f "$p"
-            else
-             echo "$p failed, skipping patch"
-            fi
-          done
-
-          echo "Kernel Optimized, hehe"
+        uses: ./.github/actions/configs
 
       - name: Add ntsync
         if: inputs.ntsync == 'true'
-        run: |
-          cd "$COMMON"
-          echo "applying ntsync patches"
-          cp "$KERNEL_PATCHES/common/ntsync/ntsync_base.patch" .
-          cp "$KERNEL_PATCHES/common/ntsync/ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" .
-          patch -p1 < ntsync_base.patch || true
-          patch -p1 < ntsync_compat_${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+        uses: ./.github/actions/ntsync
+        with:
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
 
-          cd "$GITHUB_WORKSPACE"
-          cat >> "$GKI_DEFCONFIG" << 'EOF'
-          CONFIG_NTSYNC=y
-          EOF
+      - name: Change Kernel Name and clean dirty
+        uses: ./.github/actions/kernel-name
 
-      - name: Change Kernel Name and remove protected exports
-        run: |
-          cd "$COMMON"
-            #Add Wild to Kernel Version
-            sed -i '$s|echo "\$res"|echo "\$res-Wild"|' ./scripts/setlocalversion
-            #Set Kernel Timestamp
-            #perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sun Apr 20 04:20:00 UTC 2025"}' ./scripts/mkcompile_h
-          
-          #Remove Abi Exports and Error
-          rm -rf ./android/abi_gki_protected_exports_*
-          perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' ./BUILD.bazel
-          
-      - name: Clean Dirty Flags
-        run: |
-          # remove dirty
-          sed -i 's/-dirty//' "./$COMMON/scripts/setlocalversion"
-          
+      - name: remove protected exports
+        uses: ./.github/actions/abi-export
+        
       - name: Set file name
         if: inputs.wksu == 'true'
-        run: |
-          ARTIFACT_BASE="${{ inputs.branch }}-${{ inputs.kernel_version }}-${{ inputs.android_version }}"
-          
-          # This gives: KSUxxxxx-branch-xxx-xxx
-          FILE_NAME="KSU${KSU_VERSION}-${ARTIFACT_BASE}"
-          
-          echo "ARTIFACT_BASE=$ARTIFACT_BASE" >> $GITHUB_ENV
-          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
-          
-          echo "✅ Final artifact name: $FILE_NAME"
+        uses: ./.github/actions/file-name
+        with:
+         branch: ${{ inputs.branch }}
+         android_version: ${{ inputs.android_version }}
+         kernel_version: ${{ inputs.kernel_version }}
 
       - name: Build
-        run : |
-          set -e
-          set -x
-          cd "$CONFIG"
-          echo "Building the kernel..."
-          if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
-            chmod +x build_kernel_GKI.sh
-            ./build_kernel_GKI.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
-            chmod +x build_kernel_GKI.sh
-            #LTO=thin ./build_kernel_GKI.sh || true
-            ./build_kernel_GKI.sh || true
-          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
-            sudo apt update
-            sudo apt-get install -y libyaml-dev
-            chmod +x build_kernel.sh
-            #LTO=thin ./build_kernel.sh || true
-            ./build_kernel.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
-            chmod +x build_script.sh
-            touch ./kernel-6.6/abi_symbollist.raw
-            touch ./kernel-6.6/abi_symbollist
-            ./build_script.sh || true
-          elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
-            tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e9945:s5e9945_user_dist
-          elif [[ ${{ inputs.branch }} == SM-A556* ]]; then
-            tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e8845:s5e8845_user_dist
-          elif [[ ${{ inputs.branch }} == SM-A055* ]]; then
-            chmod +x build_kernel.sh
-            ./build_kernel.sh
-          else
-            #temporarily using this until i can figure out the other phones build script issues
-            cd kernel_platform
-            tools/bazel build --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
-          fi
+        uses: ./.github/actions/build
+        with:
+         branch: ${{ inputs.branch }}
           
       - name: Prepare AnyKernel3
-        run: |
-          cd "$CONFIG"
-          # Copy Image from normal build locations
-          #if [ -f "./$CONFIG/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image" ]; then
-          #  cp ./$CONFIG/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image AnyKernel3/Image
-          #elif [ -f "./$CONFIG/bazel-bin/common/kernel_aarch64/Image" ]; then
-          #  cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image AnyKernel3/Image
-          #else
-          #  echo "Error: Image file not found in any expected location"
-          #  exit 1
-          #fi
-          
-          if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit5" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
-            cp ./kernel_platform/sec/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" ]]; then
-            cp ./out/msm-pineapple-pineapple-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
-            cp ./kernel_platform/gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ -f ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ]]; then
-            cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" ]]; then
-            cp ./out/msm-kalama-kalama-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
-            cp ./arch/arm64/boot/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
-            cp ./kernel-6.6/out/arch/arm64/boot/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
-            cp ./out/s5e9945_user/dist/Image "$ANYKERNEL3/Image"
-          elif [[ ${{ inputs.branch }} == SM-A556* ]]; then
-            cp ./out/s5e8845_user/dist/Image "$ANYKERNEL3/Image"
-          elif [[ "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" ]]; then
-            cp ./out/msm-waipio-waipio-gki/dist/Image "$ANYKERNEL3/Image"
-          elif [[ ${{ inputs.branch }} == SM-A055* ]]; then
-            cp ./out/target/product/a05m/obj/KLEAF_OBJ/dist/kernel_device_modules-6.6/mgk_64_k66_kernel_aarch64.user/Image.gz "$ANYKERNEL3/Image.gz"
-          else
-            echo "Error: Image file not found in any expected location"
-            exit 1
-          fi
+        uses: ./.github/actions/ak3zip-prep
+        with:
+         branch: ${{ inputs.branch }}
 
       - name: Upload AnyKernel3 Artifacts
         id: upload_ak3
@@ -582,7 +323,6 @@ jobs:
           echo "- **Android Version**: ${{ inputs.android_version }}" >> build_summary.md
           echo "- **Kernel Version**: ${{ inputs.kernel_version }}.${{ inputs.sub_level }}" >> build_summary.md
           echo "- **BBG**: Installed" >> build_summary.md
-          echo "- **Bypass Mode**: ${{ matrix.apply_bypass }}" >> build_summary.md
           echo "" >> build_summary.md
 
           # Get KernelSU-Next commit
