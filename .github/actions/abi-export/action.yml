@@ -9,16 +9,12 @@ runs:
     run: |
      cd "$CONFIG"
      if [[ -d kernel_platform ]]; then
-      cd kernel_platform
-      rm -rf ./common/android/abi_gki_protected_exports_*
-      rm -rf ./msm-kernel/android/abi_gki_protected_exports_*
+      rm -rf ./kernel_platform/common/android/abi_gki_protected_exports_*
+      rm -rf ./kernel_platform/msm-kernel/android/abi_gki_protected_exports_*
      else
-      cd "$GITHUB"WORKSPACE"
-      cd "$COMMON"
-      rm -rf ./android/abi_gki_protected_exports_*
+      rm -rf "$COMMON"/android/abi_gki_protected_exports_*
      fi
 
      #remove protected exports from build.bazel file
-     cd "$GITHUB"WORKSPACE"
      cd "$COMMON"
      perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' ./BUILD.bazel
