@@ -111,57 +111,7 @@ jobs:
       - name: Add KernelSU-Next
         if: inputs.wksu == 'true'
         uses: ./.github/actions/ksun
-
-#      - name: Getting KernelSU-Next Version
-#        if: inputs.wksu == 'true'
-#        run: |
-#          cd "$COMMON/KernelSU-Next/kernel"
-#          
-#          KSU_DIR=$(pwd)
-#          KBUILD="Kbuild"
-#          BASE_VERSION=30000
-
-
-          #if [ -d "$KSU_DIR/.git" ]; then
-           #   echo "✔ Git repo detected"
-
-            #  # Unshallow if needed
-             # if [ -f "$KSU_DIR/.git/shallow" ]; then
-              #    git -C "$KSU_DIR" fetch --unshallow || true
-       #       fi
-
-              # Get commit count
-        #      KSU_GIT_VERSION=$(git -C "$KSU_DIR" rev-list --count HEAD)
-
-              # Calculate version
-         #     KSU_VERSION=$((BASE_VERSION + KSU_GIT_VERSION))
-
-              # Get latest tag (safe)
-          #    KSU_GIT_TAG=$(git -C "$KSU_DIR" describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")
-
- #         else
-  #            echo "⚠ Not a git repo, using defaults"
-   #           KSU_VERSION=33129
-    #          KSU_GIT_TAG="v3.2.0"
-     #     fi
-
-      #    echo "Computed version: $KSU_VERSION"
-       #   echo "Computed tag: $KSU_GIT_TAG"
-
-          # Export for CI (optional)
-     #     echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
-      #    echo "KSU_VERSION_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
-
-          # --- Update Kbuild fallback values ---
-
-          # Update numeric fallback
-    #      sed -i "s/KSU_VERSION_FALLBACK := [0-9]\+/KSU_VERSION_FALLBACK := ${KSU_VERSION}/" "$KBUILD"
-
-          # Update tag fallback
-     #     sed -i "s/KSU_VERSION_TAG_FALLBACK := .*/KSU_VERSION_TAG_FALLBACK := ${KSU_GIT_TAG}/" "$KBUILD"
-
-      #    echo "✅ Updated fallback values in $KBUILD"
-          
+        
       - name: Apply SUSFS Patches
         if: inputs.susfs == 'true'
         uses: ./.github/actions/susfs-patches
