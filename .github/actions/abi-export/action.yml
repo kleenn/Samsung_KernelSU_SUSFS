@@ -16,5 +16,6 @@ runs:
      fi
 
      #remove protected exports from build.bazel file
+     cd ..
      cd "$COMMON"
      perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' ./BUILD.bazel
