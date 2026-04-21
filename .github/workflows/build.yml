@@ -63,8 +63,13 @@ jobs:
           rm_cmd: "rmz"  # Use 'rmz' for faster deletion (default: 'rm')
           rmz_version: "3.1.1"  # Required when rm_cmd is 'rmz'
           testing: false
-      
-          
+
+      - name: Setup more Swap (for LTO)
+        uses: thejerrybao/setup-swap-space@v1   # or pierotofy/set-swap-space
+        with:
+          swap-size-gb: 25          # 10-24 GB is common for heavy LTO
+        # swap-space-path: /mnt/swapfile   # optional
+        
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on inputs values
@@ -95,9 +100,10 @@ jobs:
           fi
           git checkout "$COMMIT"
       
-      - name: Clone Kernel Source
-        run: |
-            git clone --depth 1 -b ${{ inputs.branch }} --single-branch https://github.com/WildKernels/Samsung_Kernels.git $CONFIG
+      - name: Download Kernel
+        uses: ./.github/actions/clone-kernel
+        with:
+          branch: ${{ inputs.branch }}
             
       - name: Set Path Environment Variables
         run: |
@@ -587,12 +593,14 @@ jobs:
             ./build_kernel_GKI.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
             chmod +x build_kernel_GKI.sh
-            LTO=thin ./build_kernel_GKI.sh || true
+            #LTO=thin ./build_kernel_GKI.sh || true
+            ./build_kernel_GKI.sh || true
           elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
             sudo apt update
             sudo apt-get install -y libyaml-dev
             chmod +x build_kernel.sh
-            LTO=thin ./build_kernel.sh || true
+            #LTO=thin ./build_kernel.sh || true
+            ./build_kernel.sh || true
           elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
             chmod +x build_script.sh
             touch ./kernel-6.6/abi_symbollist.raw
