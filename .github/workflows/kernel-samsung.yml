@@ -28,9 +28,6 @@ on:
       ntsync:
         required: true
         type: string
-      optimizations:
-        required: true
-        type: string
 
 jobs:
   build-kernels-a12:
