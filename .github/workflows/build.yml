@@ -154,6 +154,8 @@ jobs:
       - name: Set Kernel Configuration Variables
         if: inputs.wksu == 'true'
         uses: ./.github/actions/configs
+        with:
+         branch: ${{ inputs.branch }}
 
       - name: Add ntsync
         if: inputs.ntsync == 'true'
