@@ -62,7 +62,7 @@ runs:
       shopt -s nullglob
       patches=("KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       
-      if [${patches[@]}" -gt 0 ]; then
+      if [${patches[@]} -gt 0 ]; then
        echo "Patches found, applying..."
        cp "${patches[@]}" ./
        
