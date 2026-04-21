@@ -60,18 +60,20 @@ runs:
       rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
 
       shopt -s nullglob
-      if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
-        echo "Directory exists, applying fixes"
-        cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"*.patch ./
-
-        # Fix SUSFS rejects
+      patches=("KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
+      
+      if [${patches[@]}" -gt 0 ]; then
+       echo "Patches found, applying..."
+       cp "${patches[@]}" ./
+       
+       # Fix SUSFS rejects
         for p in *.patch; do
           patch -p1 < "$p"
           rm -f "$p"
         done
         shopt -u nullglob
       else
-        echo "No directory found, skipping"
+        echo "No patch file found, skipping"
       fi
           
       cd "$GITHUB_WORKSPACE"
