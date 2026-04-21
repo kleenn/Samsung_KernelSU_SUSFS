@@ -1,0 +1,79 @@
+name: apply susfs patches
+description: apply susfs patches
+inputs:
+  android_version:
+   description: 'Android version (android14)'
+   required: true
+  kernel_version:
+   description: 'Kernel version (6.1)'
+
+runs:
+  using: composite
+  steps:
+   - name: Apply to KSUN
+     shell: bash
+     run: |
+       cd "$COMMON/KernelSU-Next"
+       SUSFS_VERSION="v2.1.0"
+          
+       # Apply SUSFS to KernelSU-Next
+       cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
+       patch -p1 < 10_enable_susfs_for_ksu.patch || true
+       rm -rf 10_enable_susfs_for_ksu.patch
+
+       #Fix rejects from adding susfs to KSUN
+       cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch .
+       rm -rf multi_manager.patch
+       rm -rf multi_sepolicy_fix.patch
+       for p in *.patch; do
+           patch -p1 < "$p"
+           rm -f "$p"
+       done
+       
+   - name: Apply to Kernel
+     shell: bash
+     run: |
+      # Apply SUSFS to kernel
+      cd "$COMMON"
+      cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
+      cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
+      cp "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" ./          
+
+      #Prepare open.c for susfs patching
+      sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+
+      #Prepare namespace.c for susfs patching
+      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
+        /#ifdef CONFIG_KDP_NS/,/#endif/ {
+           /#else/,/#endif/!d
+           /#else/d
+           /#endif/d
+        }
+       }' fs/namespace.c
+          
+      # Apply SUSFS core patch
+      patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+      rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+          
+      if [ -d "$KERNEL_PATCHES/samsung/${{ inputs.branch }}" ]; then
+        echo "Directory exists, applying fixes"
+        cp "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/"*.patch ./
+
+        # Fix SUSFS rejects
+        shopt -s nullglob
+
+        for p in *.patch; do
+          patch -p1 < "$p"
+          rm -f "$p"
+        done
+
+        shopt -u nullglob
+      else
+        echo "No directory found, skipping"
+      fi
+          
+      cd "$GITHUB_WORKSPACE"
+      cat >> "$GKI_DEFCONFIG" << 'EOF'
+      # SUSFS Configuration
+      CONFIG_KSU_SUSFS=y
+      EOF
