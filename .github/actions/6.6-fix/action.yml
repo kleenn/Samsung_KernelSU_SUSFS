@@ -1,8 +1,8 @@
 name: Fix wifi and BT
 description: fix wifi and BT on samsung 6.6 devices
 inputs:
-  kernel_version:
-   description: 'Kernel version (6.6)'
+ branch: 
+   description: 'device kernel'
    required: true
 
 runs:
@@ -12,6 +12,7 @@ runs:
     shell: bash
     run: |
      cd "$COMMON"
+     patch -p1 < "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/kdp/add_min_kdp.patch"
          
      SYMBOL_LIST=android/abi_gki_aarch64_galaxy
      echo "kdp_set_cred_non_rcu" >> $SYMBOL_LIST
