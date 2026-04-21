@@ -22,6 +22,7 @@ runs:
    - name: add bbg into kconfig
      shell: bash
      run: |
+       cd "$COMMON"
        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
    - name: if config_lsm is in defconfig, add bbg
