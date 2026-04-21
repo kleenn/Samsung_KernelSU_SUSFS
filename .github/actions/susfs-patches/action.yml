@@ -60,7 +60,7 @@ runs:
       rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
 
       shopt -s nullglob
-      patches=("KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
+      patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       
       if [ ${#patches[@]} -gt 0 ]; then
        echo "Patches found, applying..."
