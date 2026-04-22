@@ -28,6 +28,9 @@ on:
       ntsync:
         required: true
         type: string
+      bbr:
+        required: true
+        type: string
 
 jobs:
   build-kernels-a12:
@@ -120,9 +123,9 @@ jobs:
           - branch: "SM-X610-Oneui6.1.1-bit7"
             android_version: "android13"
             kernel_version: "5.15"
-          - branch: "SM-A075M-Oneui7"
-            android_version: "android12"
-            kernel_version: "5.10"
+#          - branch: "SM-A075M-Oneui7"
+#            android_version: "android12"
+#            kernel_version: "5.10"
           
 
     uses: ./.github/workflows/build.yml
