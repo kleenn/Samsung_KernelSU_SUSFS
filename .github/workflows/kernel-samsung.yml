@@ -141,4 +141,5 @@ jobs:
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
+      bbr: ${{ inputs.bbr }}
 
