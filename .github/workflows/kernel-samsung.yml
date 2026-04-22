@@ -19,7 +19,7 @@ on:
       zeromount:
         required: true
         type: string
-      wksu:
+      ksun:
         required: true
         type: string
       droidspace:
@@ -138,7 +138,7 @@ jobs:
       bbg: ${{ inputs.bbg }}
       unicodefix: ${{ inputs.unicodefix }}
       zeromount: ${{ inputs.zeromount }}
-      wksu: ${{ inputs.wksu }}
+      ksun: ${{ inputs.ksun }}
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
       bbr: ${{ inputs.bbr }}
