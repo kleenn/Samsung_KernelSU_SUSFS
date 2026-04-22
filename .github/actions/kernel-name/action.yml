@@ -1,0 +1,18 @@
+name: set kernel name
+description: add wild and remove dirty from kernel name
+
+runs:
+ using: composite
+ steps:
+  - name: add wild to kernel name
+    shell: bash
+    run: |
+     cd "$COMMON"
+
+     sed -i '$s|echo "\$res"|echo "\$res-Wild"|' ./scripts/setlocalversion
+
+  - name: remove dirty flag
+    shell: bash
+    run: |
+     
+     sed -i 's/-dirty//' "./$COMMON/scripts/setlocalversion"

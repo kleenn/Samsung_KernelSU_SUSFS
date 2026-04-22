@@ -1,0 +1,37 @@
+name: Fix wifi and BT
+description: fix wifi and BT on samsung 6.6 devices
+inputs:
+ branch: 
+   description: 'device kernel'
+   required: true
+
+runs:
+ using: composite
+ steps:
+  - name: fix wifi and BT for 6.6 samsung
+    shell: bash
+    run: |
+     cd "$COMMON"
+     patch -p1 < "$KERNEL_PATCHES/samsung/${{ inputs.branch }}/kdp/add_min_kdp.patch"
+         
+     SYMBOL_LIST=android/abi_gki_aarch64_galaxy
+     echo "kdp_set_cred_non_rcu" >> $SYMBOL_LIST
+     echo "kdp_usecount_dec_and_test" >> $SYMBOL_LIST
+     echo "kdp_usecount_inc" >> $SYMBOL_LIST
+
+     if [[ "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
+       echo "snd_soc_find_dai" >> $SYMBOL_LIST
+       sed -i '
+       /"kernel_aarch64": {/,/},/ {
+       s/"kmi_symbol_list_strict_mode": True/"kmi_symbol_list_strict_mode": False/
+       s/"trim_nonlisted_kmi": True/"trim_nonlisted_kmi": False/
+       }
+       /"kernel_aarch64_16k": {/,/},/ {
+       s/"kmi_symbol_list_strict_mode": True/"kmi_symbol_list_strict_mode": False/
+       s/"trim_nonlisted_kmi": True/"trim_nonlisted_kmi": False/
+       }
+       ' BUILD.bazel
+     fi
+
+     cp "$KERNEL_PATCHES/samsung/min_kdp/min_kdp.c" drivers/min_kdp.c
+     echo "obj-y += min_kdp.o" >> drivers/Makefile

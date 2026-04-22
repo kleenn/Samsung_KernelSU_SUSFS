@@ -19,75 +19,45 @@ on:
 
       wksu:
         description: "Build with WKSU?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
+        required: false
+        default: true
+        type: boolean
 
       susfs:
         description: "Build with SUSFS?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
+        required: false
+        type: boolean
+        default: true
 
       bbg:
         description: "Build with BBG?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
+        required: false
+        type: boolean
+        default: true
 
       zeromount:
         description: "Add Zeromount?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: no
+        required: false
+        type: boolean
+        default: false
         
       unicodefix:
         description: "Add unicode fix?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
+        required: false
+        type: boolean
+        default: true
 
       droidspace:
         description: "add droidspace support?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
+        required: false
+        type: boolean
+        default: true
 
       ntsync:
         description: "add ntsync?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: yes
-
-      optimizations:
-        description: "add optimizations from kernel patches repo?"
-        required: true
-        type: choice
-        options:
-          - yes
-          - no
-        default: no
+        required: false
+        type: boolean
+        default: true
 
 jobs:
 
@@ -102,7 +72,6 @@ jobs:
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
-      optimizations: ${{ inputs.optimizations }}
 
   release:
     runs-on: ubuntu-latest

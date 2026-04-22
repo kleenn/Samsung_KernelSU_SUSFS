@@ -1,0 +1,42 @@
+name: add droidspaces
+description: apply patches and configs for droidspaces support
+
+runs:
+ using: composite
+ steps:
+  - name: apply patch and add configs
+    shell: bash
+    run: |
+     cd "$COMMON"
+     # ABI: use ABI padding for SYSVIPC This commit allows us to enable CONFIG_SYSVIPC in defconfig without breaking kernel ABI
+     patch -p1 --forward < "$KERNEL_PATCHES/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+
+     cd "$GITHUB_WORKSPACE"
+     cat >> "$GKI_DEFCONFIG" << 'EOF'
+     # IPC
+     CONFIG_SYSVIPC=y
+     CONFIG_POSIX_MQUEUE=y
+
+     # Namespaces
+     CONFIG_IPC_NC=y
+     CONFIG_PID_NS=y
+
+     # HW Access Support
+     CONFIG_DEVTMPFS=y
+
+     # Below configs are optional
+
+     # Docker NAT
+     CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+
+     # UFW
+     CONFIG_NETFILTER_XT_TARGET_REJECT=y
+     CONFIG_NETFILTER_XT_TARGET_LOG=y
+     CONFIG_NETFILTER_XT_MATCH_RECENT
+
+     # Fail2Ban
+     CONFIG_IP_SET=y
+     CONFIG_IP_SET_HASH_IP=y
+     CONFIG_IP_SET_HASH_NET=y
+     CONFIG_NETFILTER_XT_SET=y
+     EOF

@@ -28,9 +28,6 @@ on:
       ntsync:
         required: true
         type: string
-      optimizations:
-        required: true
-        type: string
 
 jobs:
   build-kernels-a12:
@@ -141,5 +138,4 @@ jobs:
       wksu: ${{ inputs.wksu }}
       droidspace: ${{ inputs.droidspace }}
       ntsync: ${{ inputs.ntsync }}
-      optimizations: ${{ inputs.optimizations }}
 

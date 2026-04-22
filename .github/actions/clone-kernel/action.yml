@@ -1,0 +1,15 @@
+name: 'Download Samsung Kernels'
+description: "initialize and download the samsung kernel"
+
+inputs:
+  branch:
+    description: 'Device Kernel branch'
+    required: true
+
+runs:
+ using: composite
+ steps:
+   - name: Clone Kernel Source
+     shell: bash
+     run: |
+      git clone --depth 1 -b ${{ inputs.branch }} --single-branch https://github.com/WildKernels/Samsung_Kernels.git $CONFIG

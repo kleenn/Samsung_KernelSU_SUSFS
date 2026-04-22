@@ -1,0 +1,23 @@
+name: unicode fix
+description: idk just got it from Fatal
+inputs:
+  kernel_version:
+   description: 'Kernel version (6.1)'
+   required: true
+
+runs:
+ using: composite
+ steps:
+  - name: apply unicode fix for specific kernel version
+    shell: bash
+    run: |
+     cd "$COMMON"
+     echo "detected kernel version: ${{ inputs.kernel_version }}"
+
+     if [[ ${{ inputs.kernel_version }} == 6.* ]]; then
+      cp "$KERNEL_PATCHES/common/unicode_bypass_fix_6.1+.patch" .
+      patch -p1 < unicode_bypass_fix_6.1+.patch
+     else
+      cp "$KERNEL_PATCHES/common/unicode_bypass_fix_6.1-.patch" .
+      patch -p1 < unicode_bypass_fix_6.1-.patch
+     fi
