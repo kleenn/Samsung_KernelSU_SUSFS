@@ -120,6 +120,13 @@ jobs:
           - branch: "SM-A055F-Oneui7"
             android_version: "android15"
             kernel_version: "6.6"
+          - branch: "SM-X610-Oneui6.1.1-bit7"
+            android_version: "android13"
+            kernel_version: "5.15"
+          - branch: "SM-A075M-Oneui7"
+            android_version: "android12"
+            kernel_version: "5.10"
+          
 
     uses: ./.github/workflows/build.yml
     secrets: inherit
