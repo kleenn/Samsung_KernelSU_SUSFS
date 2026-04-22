@@ -20,13 +20,11 @@ runs:
        ./build_kernel_GKI.sh || true
      elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || "${{ inputs.branch }}" == "SM-S911B-Oneui8-bit8" || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
        chmod +x build_kernel_GKI.sh
-       #LTO=thin ./build_kernel_GKI.sh || true
        ./build_kernel_GKI.sh || true
-     elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" ]]; then
-       sudo apt update
-       sudo apt-get install -y libyaml-dev
+     elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" || ${{ inputs.branch }} == SM-A055* || "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" ]]; then
+       #sudo apt update
+       #sudo apt-get install -y libyaml-dev
        chmod +x build_kernel.sh
-       #LTO=thin ./build_kernel.sh || true
        ./build_kernel.sh || true
      elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
        chmod +x build_script.sh
