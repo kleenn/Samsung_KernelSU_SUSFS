@@ -136,6 +136,10 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
+      - name: Add bbrv1
+        if: inputs.bbr == 'true'
+        uses: ./.github/actions/bbr
+
       - name: Add BBG
         if: inputs.bbg == 'true'
         uses: ./.github/actions/bbg
@@ -153,16 +157,8 @@ jobs:
       - name: Add droidspace support
         if: inputs.droidspace == 'true'
         uses: ./.github/actions/droidspaces
-
-      - name: Add bbrv1
-        if: inputs.bbr == 'true'
-        uses: ./.github/actions/bbr
-          
-      - name: Set Kernel Configuration Variables
-        if: inputs.ksun == 'true'
-        uses: ./.github/actions/configs
         with:
-         branch: ${{ inputs.branch }}
+          kernel_version: ${{ inputs.kernel_version }}
 
       - name: Add ntsync
         if: inputs.ntsync == 'true'
@@ -170,7 +166,13 @@ jobs:
         with:
           android_version: ${{ inputs.android_version }}
           kernel_version: ${{ inputs.kernel_version }}
-
+          
+      - name: Set Kernel Configuration Variables
+        if: inputs.ksun == 'true'
+        uses: ./.github/actions/configs
+        with:
+         branch: ${{ inputs.branch }}
+         
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
 
