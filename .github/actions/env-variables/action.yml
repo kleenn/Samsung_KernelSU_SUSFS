@@ -42,6 +42,8 @@ runs:
        COMMON="$CONFIG/kernel-6.6"
      elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" || ${{ inputs.branch }} == SM-A556* ]]; then
        COMMON="$CONFIG/kernel"
+     elif [[ "${{ inputs.branch }}" == "SM-A075M-Oneui7" ]]; then
+       COMMON="$CONFIG/kernel-5.10"
      else
        COMMON="$CONFIG/kernel_platform/common"
      fi
