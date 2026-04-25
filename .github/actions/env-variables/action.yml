@@ -36,7 +36,7 @@ runs:
   - name: set common variable
     shell: bash
     run: |
-     if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" || "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" ]]; then  
+     if [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" || "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" || "${{ inputs.branch }}" == "SM-A166B-Oneui7" ]]; then  
        COMMON="$CONFIG"
      elif [[ "${{ inputs.branch }}" == "SM-A566B" || ${{ inputs.branch }} == SM-A055* ]]; then
        COMMON="$CONFIG/kernel-6.6"
@@ -62,6 +62,8 @@ runs:
        GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e9925-b0sxxx_defconfig"
      elif [[ "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" ]]; then
       GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8835-gts9fepwifixx_defconfig"
+     elif [[ "${{ inputs.branch }}" == "SM-A166B-Oneui7" ]]; then
+      GKI_DEFCONFIG="$COMMON/arch/arm64/configs/s5e8535-a16xxx_defconfig"
      else
        GKI_DEFCONFIG="$COMMON/arch/arm64/configs/gki_defconfig"
      fi
