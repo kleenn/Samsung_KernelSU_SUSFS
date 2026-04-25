@@ -32,7 +32,7 @@ runs:
      if [[ "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" ]]; then
      echo "nothing to see here moving on"
           
-     elif [[ "${{ inputs.branch }}" == "SM-S926B-Oneui8" ]]; then
+     elif [[ ${{ inputs.branch }} == SM-S926B* ]]; then
      cat >> "$COMMON/arch/arm64/configs/s5e9945-bazel_defconfig" << 'EOF'
      # nuke root protection
      CONFIG_UH=n
