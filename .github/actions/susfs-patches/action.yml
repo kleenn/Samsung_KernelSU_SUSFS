@@ -1,15 +1,9 @@
 name: apply susfs patches
 description: apply susfs patches
 inputs:
-  android_version:
-    description: 'Android version'
-    required: true
-  kernel_version:
-    description: 'Kernel version'
-    required: true
-  branch:
-    description: 'device kernel'
-    required: true
+  android_version: { required: true }
+  kernel_version: { required: true }
+  branch: { required: true }
 
 runs:
   using: composite
@@ -17,7 +11,7 @@ runs:
    - name: Apply SUSFS to Manager
      shell: bash
      run: |
-       echo "🚀 SukiSU-Ultra 已原生内置 SUSFS 架构，系统自动跳过管理器侧的冗余补丁，以阻断底层冲突。"
+       echo "🚀 SukiSU-Ultra 已原生内置 SUSFS，跳过冗余管理器补丁。"
        
    - name: Apply SUSFS to Kernel
      shell: bash
@@ -26,7 +20,7 @@ runs:
       cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
       cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
 
-      # 核心防线：回归原生单行 echo，彻底根除 EOF 在 YAML 中引发的语法树崩塌
+      # 核心防线：C 语言空桩
       echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
       echo "void ksu_handle_sys_reboot(void) {}" >> fs/ksu_dummy_hooks.c
       echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
@@ -37,14 +31,13 @@ runs:
       echo "int ksu_handle_execveat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_handle_devpts(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_input_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
-      
       grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
 
-      # 三星 Knox/DEFEX 清理
+      # 三星 Knox 清理
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
           
-      # 系统架构补丁
+      # 核心架构补丁
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
 
       # 设备树补丁
@@ -54,8 +47,19 @@ runs:
        cp "${patches[@]}" ./
        for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
       fi
+
+      # ================= 新增：阻断静默抹除的 Kconfig 户口注册 =================
+      echo "config KSU_SUSFS" >> fs/Kconfig
+      echo "    bool \"SUSFS Support\"" >> fs/Kconfig
+      echo "    default y" >> fs/Kconfig
+      
+      for conf in KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT KSU_SUSFS_SUS_KSTAT KSU_SUSFS_SUS_OVERLAYFS KSU_SUSFS_TRY_UMOUNT KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_SU; do
+        echo "config $conf" >> fs/Kconfig
+        echo "    bool" >> fs/Kconfig
+        echo "    default y" >> fs/Kconfig
+      done
+      # =====================================================================
           
-      # 纯净注入，规避 EOF 黑洞
       cd "$GITHUB_WORKSPACE"
       {
         echo "# SUSFS 2.1.0 Configuration"
