@@ -29,6 +29,8 @@ runs:
        for p in *.patch; do patch -p1 < "$p" || true; done
        
        echo "🔨 执行 C 源码语法级强行修复 (纯 echo 注入)..."
+       # 【新增】：物理注入被补丁遗漏的 susfs.h，终结 susfs_init 隐式声明报错
+       sed -i '1s/^/#include <linux\/susfs.h>\n/' kernel/core/init.c || true
        sed -i 's/write_sulog/ksu_sulog/g' kernel/feature/sucompat.c || true
        sed -i '/write_sulog/d' kernel/feature/sucompat.c || true
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
