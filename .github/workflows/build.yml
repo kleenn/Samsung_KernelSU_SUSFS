@@ -175,12 +175,11 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-            # ================== 核心功能注入区 ==================
+                  # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
           
-          # 1. 获取 LZ4KD 核心源码
           git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
           KERNEL_SRC=""
           for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
@@ -189,33 +188,39 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 2. 注入 LZ4KD 与 OPlus 源码实体
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
           
-          # 3. 强力防静默抹除：在 crypto/Kconfig 中为 LZ4KD 注册合法身份
-          echo "config CRYPTO_LZ4KD" >> crypto/Kconfig
-          echo "    tristate \"LZ4KD compression algorithm\"" >> crypto/Kconfig
-          echo "    default y" >> crypto/Kconfig
-          echo "config CRYPTO_LZ4K_OPLUS" >> crypto/Kconfig
-          echo "    bool \"OPlus LZ4K optimizations\"" >> crypto/Kconfig
-          echo "    default y" >> crypto/Kconfig
+          # 【物理修复】：解除三星 GKI 的私有注释，让 OnePlus 补丁顺利打入
+          sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
+          sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 应用 LZ4KD 补丁并注册 zcomp 前端白名单
+          # 注册 Kconfig 户口
+          grep -q "CRYPTO_LZ4KD" crypto/Kconfig || cat << 'EOF' >> crypto/Kconfig
+config CRYPTO_LZ4KD
+	tristate "LZ4KD compression algorithm"
+	default y
+config CRYPTO_LZ4K_OPLUS
+	bool "OPlus LZ4K optimizations"
+	default y
+EOF
+          
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
           sed -i 's/"lz4",/"lz4", "lz4kd",/g' drivers/block/zram/zcomp.c || true
           
-          # 4. 全量配置挂载 (ZRAM内联 + 高级网络栈)
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
-          
+          # 【修正】：找回 LZ4KD 开关，但不碰 ZRAM 的 =m 状态
           {
+            echo "CONFIG_CRYPTO_LZ4KD=y"
+            echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+            
             echo "CONFIG_BPF_STREAM_PARSER=y"
             echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
             echo "CONFIG_NETFILTER_XT_SET=y"
@@ -249,21 +254,6 @@ jobs:
             echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
           } >> "$DEFCONFIG"
 
-      # 编译产物自验证探针 (挂载在 Build 步骤之后，上传之前)
-      - name: Self-Verification Audit
-        if: always()
-        run: |
-          echo "=== 核心特性落盘全量核验 ==="
-          cd $GITHUB_WORKSPACE
-          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1)
-          if [ -f "$CONFIG_FILE" ]; then
-            echo "✅ 成功截获最终底层配置文件: $CONFIG_FILE"
-            grep -iE "KSU_SUSFS|ZRAM|LZ4KD|NETFILTER_XT_TARGET_TPROXY|IP_SET_HASH_NET" "$CONFIG_FILE" || echo "❌ 严重警告：有核心参数被剔除！"
-          else
-            echo "❌ 未能在工作区发现 .config"
-          fi
-      # ==================================================
-
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
 
@@ -282,6 +272,20 @@ jobs:
         uses: ./.github/actions/build
         with:
          branch: ${{ inputs.branch }}
+
+            # 编译产物自验证探针 (必须挂载在 Build 步骤之后！)
+      - name: Self-Verification Audit
+        if: always()
+        run: |
+          echo "=== 核心特性落盘全量核验 ==="
+          cd $GITHUB_WORKSPACE
+          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1)
+          if [ -f "$CONFIG_FILE" ]; then
+            echo "✅ 成功截获最终底层配置文件: $CONFIG_FILE"
+            grep -iE "KSU_SUSFS|ZRAM|LZ4KD|NETFILTER_XT_TARGET_TPROXY|IP_SET_HASH_NET" "$CONFIG_FILE" || echo "❌ 严重警告：有核心参数被剔除！"
+          else
+            echo "❌ 未能在工作区发现 .config，可能是底层 build 脚本采用了非标准输出架构"
+          fi
           
       - name: Prepare AnyKernel3
         uses: ./.github/actions/ak3zip-prep
