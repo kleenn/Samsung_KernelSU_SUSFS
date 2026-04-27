@@ -8,17 +8,18 @@ runs:
       shell: bash
       run: |
         cd "$COMMON"
-        # 1. 绝对锚定 SukiSU-Ultra 长哈希
-        SUKI_COMMIT="77b57eff14a729c8e25979be760c4696b730e062"
-        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/${SUKI_COMMIT}/kernel/setup.sh" | bash -s ${SUKI_COMMIT}
+        # 1. 先拉取 main 分支
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
 
-        # 2. 建立软链接兼容层，接管 CI 流水线
-        if [ -d "KernelSU" ] && [ ! -d "KernelSU-Next" ]; then
-          ln -s KernelSU KernelSU-Next
-        fi
+        # 建立软链接兼容层
+        if [ -d "KernelSU" ] && [ ! -d "KernelSU-Next" ]; then ln -s KernelSU KernelSU-Next; fi
 
-        # 3. 动态修复编译期版本号
-        cd KernelSU-Next/kernel
+        # 2. 强行物理切换到指定的 Commit
+        cd KernelSU-Next
+        git checkout 77b57eff14a729c8e25979be760c4696b730e062
+
+        # 3. 版本号欺骗
+        cd kernel
         COMMITS_COUNT=$(/usr/bin/git rev-list --count HEAD)
         BASE_VERSION=30000
         KSU_VERSION=$(expr $COMMITS_COUNT "+" $BASE_VERSION)
@@ -26,7 +27,6 @@ runs:
         KSU_GIT_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")"
         sed -i "s/^KSU_VERSION_TAG_FALLBACK := v0.0.1$/KSU_VERSION_TAG_FALLBACK := ${KSU_GIT_TAG}/" Kbuild
 
-        # 4. 原生 echo 注入，拒绝 EOF 语法崩溃
         cd "$GITHUB_WORKSPACE"
         echo "# SukiSU-Ultra Configuration" >> "$GKI_DEFCONFIG"
         echo "CONFIG_KSU=y" >> "$GKI_DEFCONFIG"
@@ -36,11 +36,5 @@ runs:
       shell: bash
       run: |
         cd "$COMMON/KernelSU-Next"
-        KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
-        KSU_GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
         KSU_COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
-        KSU_VERSION=$((30000 + KSU_GIT_VERSION))
-        
-        echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
-        echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
         echo "KSU_COMMIT=$KSU_COMMIT" >> $GITHUB_ENV
