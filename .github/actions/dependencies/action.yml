@@ -23,23 +23,19 @@ runs:
      ANYKERNEL_BRANCH="gki-2.0"
      git clone https://github.com/WildKernels/kernel_patches.git
      git clone https://github.com/WildKernels/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+     
      if [[ ${{ inputs.zeromount }} == 'true' ]]; then
       git clone https://github.com/jimsterino98/Super-Builders.git
      fi
 
      if [[ ${{ inputs.susfs }} == 'true' ]]; then
       SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+      echo "🚀 正在解除版本枷锁，拉取 susfs4ksu 的最新分支: $SUSFS_BRANCH ..."
+      
+      # 直接拉取目标分支的最新代码，彻底废弃硬编码的旧版 COMMIT 逻辑
       git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
      
       cd susfs4ksu
-      if [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android12-5.10" ]]; then
-        COMMIT=674f72b6f683e837d7f557704cabe00a83eeb0b4
-      elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android13-5.15" ]]; then
-        COMMIT=eaa5d299dd85a4230f936b94dc5dd8303f27130a
-      elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android14-6.1" ]]; then
-        COMMIT=971cc4e770b7f344a4df35ce92d7a859e6a1e0fd
-      elif [[ "${{ inputs.android_version }}-${{ inputs.kernel_version }}" == "android15-6.6" ]]; then
-        COMMIT=85bcfac5edc8ba7808581e8d0a3ca9c7deca78e4
-      fi
-      git checkout "$COMMIT"
+      LATEST_COMMIT=$(git rev-parse HEAD)
+      echo "✅ SUSFS 源码已同步至上游最新防检测节点 (Commit: $LATEST_COMMIT)"
      fi
