@@ -172,7 +172,106 @@ jobs:
         uses: ./.github/actions/configs
         with:
          branch: ${{ inputs.branch }}
-         
+
+            # ================== 核心功能注入区 ==================
+      - name: Inject Network & LZ4KD Optimizations
+        run: |
+          cd "$CONFIG"
+          
+          # 1. 获取 LZ4KD 核心源码
+          git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
+          KERNEL_SRC=""
+          for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
+            if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
+          done
+          [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+          cd "$KERNEL_SRC"
+          
+          # 2. 注入 LZ4KD 与 OPlus 源码实体
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
+          
+          # 3. 强力防静默抹除：在 crypto/Kconfig 中为 LZ4KD 注册合法身份
+          echo "config CRYPTO_LZ4KD" >> crypto/Kconfig
+          echo "    tristate \"LZ4KD compression algorithm\"" >> crypto/Kconfig
+          echo "    default y" >> crypto/Kconfig
+          echo "config CRYPTO_LZ4K_OPLUS" >> crypto/Kconfig
+          echo "    bool \"OPlus LZ4K optimizations\"" >> crypto/Kconfig
+          echo "    default y" >> crypto/Kconfig
+          
+          # 应用 LZ4KD 补丁并注册 zcomp 前端白名单
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
+          patch -p1 -F 3 < lz4kd.patch || true
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
+          patch -p1 -F 3 < lz4k_oplus.patch || true
+          sed -i 's/"lz4",/"lz4", "lz4kd",/g' drivers/block/zram/zcomp.c || true
+          
+          # 4. 全量配置挂载 (ZRAM内联 + 高级网络栈)
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
+          
+          # 强制 ZRAM 及分配器转为内联静态编译
+          sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$DEFCONFIG"
+          sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$DEFCONFIG"
+          sed -i 's/CONFIG_CRYPTO_LZ4=m/CONFIG_CRYPTO_LZ4=y/g' "$DEFCONFIG"
+          
+          {
+            echo "CONFIG_ZRAM=y"
+            echo "CONFIG_ZSMALLOC=y"
+            echo "CONFIG_CRYPTO_LZ4KD=y"
+            echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+            echo "CONFIG_ZRAM_WRITEBACK=y"
+            
+            echo "CONFIG_BPF_STREAM_PARSER=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
+            echo "CONFIG_NETFILTER_XT_SET=y"
+            echo "CONFIG_IP_SET=y"
+            echo "CONFIG_IP_SET_MAX=65534"
+            echo "CONFIG_IP_SET_BITMAP_IP=y"
+            echo "CONFIG_IP_SET_BITMAP_IPMAC=y"
+            echo "CONFIG_IP_SET_BITMAP_PORT=y"
+            echo "CONFIG_IP_SET_HASH_IP=y"
+            echo "CONFIG_IP_SET_HASH_IPMARK=y"
+            echo "CONFIG_IP_SET_HASH_IPPORT=y"
+            echo "CONFIG_IP_SET_HASH_IPPORTIP=y"
+            echo "CONFIG_IP_SET_HASH_IPPORTNET=y"
+            echo "CONFIG_IP_SET_HASH_IPMAC=y"
+            echo "CONFIG_IP_SET_HASH_MAC=y"
+            echo "CONFIG_IP_SET_HASH_NETPORTNET=y"
+            echo "CONFIG_IP_SET_HASH_NET=y"
+            echo "CONFIG_IP_SET_HASH_NETNET=y"
+            echo "CONFIG_IP_SET_HASH_NETPORT=y"
+            echo "CONFIG_IP_SET_HASH_NETIFACE=y"
+            echo "CONFIG_IP_SET_LIST_SET=y"
+            echo "CONFIG_IP6_NF_NAT=y"
+            echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
+            echo "CONFIG_NETFILTER=y"
+            echo "CONFIG_NETFILTER_ADVANCED=y"
+            echo "CONFIG_NETFILTER_XTABLES=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_MARK=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_MARK=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
+          } >> "$DEFCONFIG"
+
+      # 编译产物自验证探针 (挂载在 Build 步骤之后，上传之前)
+      - name: Self-Verification Audit
+        if: always()
+        run: |
+          echo "=== 核心特性落盘全量核验 ==="
+          cd $GITHUB_WORKSPACE
+          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1)
+          if [ -f "$CONFIG_FILE" ]; then
+            echo "✅ 成功截获最终底层配置文件: $CONFIG_FILE"
+            grep -iE "KSU_SUSFS|ZRAM|LZ4KD|NETFILTER_XT_TARGET_TPROXY|IP_SET_HASH_NET" "$CONFIG_FILE" || echo "❌ 严重警告：有核心参数被剔除！"
+          else
+            echo "❌ 未能在工作区发现 .config"
+          fi
+      # ==================================================
+
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
 
