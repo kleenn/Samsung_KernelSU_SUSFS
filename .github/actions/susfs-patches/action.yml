@@ -8,20 +8,93 @@ inputs:
 runs:
   using: composite
   steps:
+   name: apply susfs patches
+description: apply susfs patches
+inputs:
+  android_version: { required: true }
+  kernel_version: { required: true }
+  branch: { required: true }
+
+runs:
+  using: composite
+  steps:
    - name: Apply SUSFS to Manager
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        SUSFS_VERSION="v2.1.0"
-       # 暴力解法：绕过废弃的补丁，直接将 SUSFS 源码实体塞入 SukiSU 树并挂载 Kbuild
-       cp "$SUSFS4KSU/kernel_patches/KernelSU/susfs.c" ./kernel/
-       cp "$SUSFS4KSU/kernel_patches/KernelSU/susfs.h" ./kernel/
-       grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
+       
+       # 1. 拷贝原始封装补丁（内含 susfs.c 与挂载指令）
+       cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
+       
+       # 2. 动态劫持：将补丁内指向旧版 Makefile 的路径，全量替换为适应 SukiSU-Ultra 的 Kbuild
+       sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
+       
+       # 3. 释放实体：打入修改后的补丁，系统会自动创建 susfs.c 并合法挂载入 Kbuild
+       patch -p1 < 10_enable_susfs_for_ksu.patch || true
+       rm -f 10_enable_susfs_for_ksu.patch
 
-       # 应用 SUSFS 原生补丁
+       # Manager 侧兼容修复补丁
        cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch .
        rm -rf multi_manager.patch multi_sepolicy_fix.patch
        for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
+       
+   - name: Apply SUSFS to Kernel
+     shell: bash
+     run: |
+      cd "$COMMON"
+      cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
+      cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
+
+      # 核心防线：C 语言空桩 (接管三星独占遗留钩子，阻断 LTO 崩溃)
+      cat << 'EOF' > fs/ksu_dummy_hooks.c
+#include <linux/types.h>
+void ksu_handle_sys_reboot(void) {}
+void ksu_init_rc_hook(void) {}
+int ksu_handle_sys_read(void) { return 0; }
+int ksu_handle_vfs_fstat(void) { return 0; }
+int ksu_execveat_hook(void) { return 0; }
+int ksu_handle_execveat_sucompat(void) { return 0; }
+int ksu_handle_execveat(void) { return 0; }
+int ksu_handle_devpts(void) { return 0; }
+int ksu_input_hook(void) { return 0; }
+EOF
+      grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
+
+      # 三星 Knox/DEFEX 清理
+      sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
+          
+      # 系统架构补丁
+      patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
+
+      # 设备树补丁
+      shopt -s nullglob
+      patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
+      if [ ${#patches[@]} -gt 0 ]; then
+       cp "${patches[@]}" ./
+       for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
+      fi
+          
+      # 纯净注入，规避 EOF 黑洞
+      cd "$GITHUB_WORKSPACE"
+      {
+        echo "# SUSFS 2.1.0 Configuration"
+        echo "CONFIG_KSU_SUSFS=y"
+        echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
+        echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+        echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y"
+        echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
+        echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y"
+        echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y"
+        echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
+        echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+        echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y"
+        echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+        echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
+        echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+        echo "CONFIG_KSU_SUSFS_SUS_SU=y"
+      } >> "$GKI_DEFCONFIG"
        
    - name: Apply SUSFS to Kernel
      shell: bash
