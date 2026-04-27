@@ -29,14 +29,23 @@ runs:
        for p in *.patch; do patch -p1 < "$p" || true; done
        
        echo "🔨 执行 C 源码语法级强行修复 (纯 echo 注入)..."
-       # 【新增】：物理注入被补丁遗漏的 susfs.h，终结 susfs_init 隐式声明报错
-       sed -i '1s/^/#include <linux\/susfs.h>\n/' kernel/core/init.c || true
+       
+       # 【核心修复 1】：将 susfs.h 注入到 init.c 正确的位置，解决第一行缺少 cred.h 导致的 current_uid 报错
+       sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
+       sed -i '/#include <linux\/moduleparam.h>/a #include <linux\/susfs.h>' kernel/core/init.c || true
+
+       # 修复 write_sulog
        sed -i 's/write_sulog/ksu_sulog/g' kernel/feature/sucompat.c || true
        sed -i '/write_sulog/d' kernel/feature/sucompat.c || true
+       
+       # 修复 is_zygote_normal_app_uid
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
        
+       # 【核心修复 2】：显式声明 susfs_run_sus_path_loop 并补全底层依赖
+       echo "#include <linux/cred.h>" >> kernel/hook/setuid_hook.h
        echo "#include <linux/susfs.h>" >> kernel/hook/setuid_hook.h
        echo "#include <linux/susfs_def.h>" >> kernel/hook/setuid_hook.h
+       echo "extern void susfs_run_sus_path_loop(void);" >> kernel/hook/setuid_hook.h
        echo "static inline void ksu_handle_extra_susfs_work(void) {" >> kernel/hook/setuid_hook.h
        echo "    const struct cred *saved = override_creds(ksu_cred);" >> kernel/hook/setuid_hook.h
        echo "#ifdef CONFIG_KSU_SUSFS_SUS_PATH" >> kernel/hook/setuid_hook.h
