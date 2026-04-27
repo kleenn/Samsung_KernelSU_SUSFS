@@ -17,23 +17,7 @@ runs:
    - name: Apply SUSFS to Manager
      shell: bash
      run: |
-       cd "$COMMON/KernelSU-Next"
-       SUSFS_VERSION="v2.1.0"
-       
-       # 1. 拷贝原始封装补丁
-       cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
-       
-       # 2. 动态劫持路径，适配 SukiSU-Ultra 架构
-       sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
-       
-       # 3. 释放实体文件
-       patch -p1 < 10_enable_susfs_for_ksu.patch || true
-       rm -f 10_enable_susfs_for_ksu.patch
-
-       # 4. Manager 侧兼容修复
-       cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch .
-       rm -rf multi_manager.patch multi_sepolicy_fix.patch
-       for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
+       echo "🚀 SukiSU-Ultra 已原生内置 SUSFS 架构，系统自动跳过管理器侧的冗余补丁，以阻断底层冲突。"
        
    - name: Apply SUSFS to Kernel
      shell: bash
