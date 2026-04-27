@@ -42,6 +42,8 @@ on:
 
 jobs:
   build-samsung-gki:
+    # 物理拦截：非目标机型直接跳过（请把单引号内的名字换成你实际编译的那个 branch 名称）
+    if: inputs.branch == 'SM-S901E-Oneui8' || inputs.branch == 'SM-S9080-Oneui8'
     name: "${{ inputs.branch }}-${{ inputs.kernel_version }}-${{ inputs.android_version }}"
     runs-on: ubuntu-latest
     strategy:
