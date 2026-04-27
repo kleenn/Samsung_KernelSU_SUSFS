@@ -8,17 +8,17 @@ runs:
       shell: bash
       run: |
         cd "$COMMON"
-        # 1. 先拉取 main 分支
+        # 1. 正常拉取 SukiSU-Ultra 的 main 分支基座
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
 
-        # 建立软链接兼容层
+        # 2. 建立软链接，接管原有的 KernelSU-Next 路径逻辑
         if [ -d "KernelSU" ] && [ ! -d "KernelSU-Next" ]; then ln -s KernelSU KernelSU-Next; fi
 
-        # 2. 强行物理切换到指定的 Commit
+        # 3. 【物理修复】：强行切换至指定的极稳妥 Hash 节点，阻断上游代码突变
         cd KernelSU-Next
         git checkout 77b57eff14a729c8e25979be760c4696b730e062
 
-        # 3. 版本号欺骗
+        # 4. 修复 Kbuild 版本号校验断层
         cd kernel
         COMMITS_COUNT=$(/usr/bin/git rev-list --count HEAD)
         BASE_VERSION=30000
@@ -27,6 +27,7 @@ runs:
         KSU_GIT_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")"
         sed -i "s/^KSU_VERSION_TAG_FALLBACK := v0.0.1$/KSU_VERSION_TAG_FALLBACK := ${KSU_GIT_TAG}/" Kbuild
 
+        # 5. 纯净单行注入开关，坚决抵制 EOF 语法黑洞
         cd "$GITHUB_WORKSPACE"
         echo "# SukiSU-Ultra Configuration" >> "$GKI_DEFCONFIG"
         echo "CONFIG_KSU=y" >> "$GKI_DEFCONFIG"
