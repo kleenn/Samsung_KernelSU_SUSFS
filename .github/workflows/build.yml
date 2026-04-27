@@ -42,7 +42,6 @@ on:
 
 jobs:
   build-samsung-gki:
-    # 物理拦截：非目标机型直接跳过（请把单引号内的名字换成你实际编译的那个 branch 名称）
     if: inputs.branch == 'SM-S901E-Oneui8' || inputs.branch == 'SM-S9080-Oneui8'
     name: "${{ inputs.branch }}-${{ inputs.kernel_version }}-${{ inputs.android_version }}"
     runs-on: ubuntu-latest
@@ -55,7 +54,7 @@ jobs:
        
       - name: Free Disk Space
         if: true
-        uses: endersonmenezes/free-disk-space@v3  # Use @main for latest, @v3 for stable
+        uses: endersonmenezes/free-disk-space@v3
         with:
           remove_android: true
           remove_dotnet: true
@@ -65,22 +64,18 @@ jobs:
           remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*"
           remove_packages_one_command: true
           remove_folders: "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell /usr/local/julia /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle"
-          rm_cmd: "rmz"  # Use 'rmz' for faster deletion (default: 'rm')
-          rmz_version: "3.1.1"  # Required when rm_cmd is 'rmz'
+          rm_cmd: "rmz"
+          rmz_version: "3.1.1"
           testing: false
 
       - name: Setup more Swap (for LTO)
-        uses: thejerrybao/setup-swap-space@v1   # or pierotofy/set-swap-space
+        uses: thejerrybao/setup-swap-space@v1
         with:
-          swap-size-gb: 25          # 10-24 GB is common for heavy LTO
-        # swap-space-path: /mnt/swapfile   # optional
+          swap-size-gb: 25
         
       - name: Set CONFIG Environment Variable
         run: |
-          # Set CONFIG dynamically based on inputs values
           CONFIG="${{ inputs.branch }}-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
-
-          # Set CONFIG as an environment variable for future steps
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
 
       - name: dependencies
@@ -106,7 +101,6 @@ jobs:
       - name: Extract all tar.xz files and delete them
         run: |
           cd "$CONFIG"
-
           find . -type f -name '*.tar.xz' -print0 | while IFS= read -r -d '' file; do
             echo "Extracting $file"
             tar -xf "$file"
@@ -175,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                  # ================== 核心功能注入区 ==================
+      # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -197,15 +191,15 @@ jobs:
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 注册 Kconfig 户口
-          grep -q "CRYPTO_LZ4KD" crypto/Kconfig || cat << 'EOF' >> crypto/Kconfig
-config CRYPTO_LZ4KD
-	tristate "LZ4KD compression algorithm"
-	default y
-config CRYPTO_LZ4K_OPLUS
-	bool "OPlus LZ4K optimizations"
-	default y
-EOF
+          # 注册 Kconfig 户口 (防 YAML 崩溃：全量改用 echo)
+          if ! grep -q "CRYPTO_LZ4KD" crypto/Kconfig; then
+            echo 'config CRYPTO_LZ4KD' >> crypto/Kconfig
+            echo '	tristate "LZ4KD compression algorithm"' >> crypto/Kconfig
+            echo '	default y' >> crypto/Kconfig
+            echo 'config CRYPTO_LZ4K_OPLUS' >> crypto/Kconfig
+            echo '	bool "OPlus LZ4K optimizations"' >> crypto/Kconfig
+            echo '	default y' >> crypto/Kconfig
+          fi
           
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
@@ -273,7 +267,7 @@ EOF
         with:
          branch: ${{ inputs.branch }}
 
-            # 编译产物自验证探针 (必须挂载在 Build 步骤之后！)
+      # 编译产物自验证探针 (挂载在 Build 步骤之后！)
       - name: Self-Verification Audit
         if: always()
         run: |
