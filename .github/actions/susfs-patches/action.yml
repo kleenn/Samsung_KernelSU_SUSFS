@@ -30,30 +30,24 @@ runs:
        
        echo "🔨 执行 C 源码语法级强行修复 (纯 echo 注入)..."
        
-       # 【核心修复 1】：将 susfs.h 注入到 init.c 正确的位置，解决第一行缺少 cred.h 导致的 current_uid 报错
+       # 核心修复 1：注入 susfs.h 解决 current_uid 报错
        sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
        sed -i '/#include <linux\/moduleparam.h>/a #include <linux\/susfs.h>' kernel/core/init.c || true
 
-       # 修复 write_sulog
-       sed -i 's/write_sulog/ksu_sulog/g' kernel/feature/sucompat.c || true
+       # 核心修复 2：彻底物理删除无用的遗留日志调用，不作任何替换
        sed -i '/write_sulog/d' kernel/feature/sucompat.c || true
+       sed -i '/ksu_sulog/d' kernel/feature/sucompat.c || true
        
-       # 修复 is_zygote_normal_app_uid
+       # 核心修复 3：修复宏定义与函数声明（绝不重复注入函数实体）
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
        
-       # 【核心修复 2】：显式声明 susfs_run_sus_path_loop 并补全底层依赖
        echo "#include <linux/cred.h>" >> kernel/hook/setuid_hook.h
        echo "#include <linux/susfs.h>" >> kernel/hook/setuid_hook.h
        echo "#include <linux/susfs_def.h>" >> kernel/hook/setuid_hook.h
        echo "extern void susfs_run_sus_path_loop(void);" >> kernel/hook/setuid_hook.h
-       echo "static inline void ksu_handle_extra_susfs_work(void) {" >> kernel/hook/setuid_hook.h
-       echo "    const struct cred *saved = override_creds(ksu_cred);" >> kernel/hook/setuid_hook.h
-       echo "#ifdef CONFIG_KSU_SUSFS_SUS_PATH" >> kernel/hook/setuid_hook.h
-       echo "    susfs_run_sus_path_loop();" >> kernel/hook/setuid_hook.h
-       echo "#endif" >> kernel/hook/setuid_hook.h
-       echo "    revert_creds(saved);" >> kernel/hook/setuid_hook.h
-       echo "}" >> kernel/hook/setuid_hook.h
+       echo "extern void susfs_set_current_proc_umounted(void);" >> kernel/hook/setuid_hook.h
 
+       # 核心修复 4：注入 SukiSU 遗漏的 SELinux 符号，彻底消除 LTO 链接崩溃
        echo "u32 susfs_ksu_sid = 0;" >> kernel/selinux/selinux.c
        echo "u32 susfs_init_sid = 0;" >> kernel/selinux/selinux.c
        echo "u32 susfs_zygote_sid = 0;" >> kernel/selinux/selinux.c
