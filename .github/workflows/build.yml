@@ -214,18 +214,8 @@ jobs:
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
-          # 强制 ZRAM 及分配器转为内联静态编译
-          sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$DEFCONFIG"
-          sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$DEFCONFIG"
-          sed -i 's/CONFIG_CRYPTO_LZ4=m/CONFIG_CRYPTO_LZ4=y/g' "$DEFCONFIG"
           
           {
-            echo "CONFIG_ZRAM=y"
-            echo "CONFIG_ZSMALLOC=y"
-            echo "CONFIG_CRYPTO_LZ4KD=y"
-            echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-            echo "CONFIG_ZRAM_WRITEBACK=y"
-            
             echo "CONFIG_BPF_STREAM_PARSER=y"
             echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
             echo "CONFIG_NETFILTER_XT_SET=y"
