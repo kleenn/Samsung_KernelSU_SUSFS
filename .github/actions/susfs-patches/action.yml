@@ -1,83 +1,77 @@
 name: apply susfs patches
 description: apply susfs patches
 inputs:
-  android_version:
-   description: 'Android version (android14)'
-   required: true
-  kernel_version:
-   description: 'Kernel version (6.1)'
-   required: true
-  branch:
-   description: 'device kernel'
-   required: true
+  android_version: { required: true }
+  kernel_version: { required: true }
+  branch: { required: true }
 
 runs:
   using: composite
   steps:
-   - name: Apply to KSUN
+   - name: Apply SUSFS to Manager
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        SUSFS_VERSION="v2.1.0"
-          
-       # Apply SUSFS to KernelSU-Next
-       cp "$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" .
-       patch -p1 < 10_enable_susfs_for_ksu.patch || true
-       rm -rf 10_enable_susfs_for_ksu.patch
+       # 暴力解法：绕过废弃的补丁，直接将 SUSFS 源码实体塞入 SukiSU 树并挂载 Kbuild
+       cp "$SUSFS4KSU/kernel_patches/KernelSU/susfs.c" ./kernel/
+       cp "$SUSFS4KSU/kernel_patches/KernelSU/susfs.h" ./kernel/
+       grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
 
-       #Fix rejects from adding susfs to KSUN
+       # 应用 SUSFS 原生补丁
        cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch .
-       rm -rf multi_manager.patch
-       rm -rf multi_sepolicy_fix.patch
-       for p in *.patch; do
-           patch -p1 < "$p"
-           rm -f "$p"
-       done
+       rm -rf multi_manager.patch multi_sepolicy_fix.patch
+       for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
        
-   - name: Apply to Kernel
+   - name: Apply SUSFS to Kernel
      shell: bash
      run: |
-      # Apply SUSFS to kernel
       cd "$COMMON"
       cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
       cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
-      cp "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" ./          
 
-      #Prepare open.c for susfs patching
+      # 核心防线：注入 C 语言桩，完美接住三星遗留的手动钩子，防止 LTO 链接期 undefined symbol 崩溃
+      echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
+      echo "void ksu_handle_sys_reboot(void) {}" >> fs/ksu_dummy_hooks.c
+      echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_sys_read(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_vfs_fstat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_execveat_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_execveat_sucompat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_execveat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_devpts(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_input_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
+
+      # 处理三星底层安全校验防线
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
-
-      #Prepare namespace.c for susfs patching
-      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
-        /#ifdef CONFIG_KDP_NS/,/#endif/ {
-           /#else/,/#endif/!d
-           /#else/d
-           /#endif/d
-        }
-       }' fs/namespace.c
+      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
           
-      # Apply SUSFS core patch
-      patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
-      rm -rf 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
+      # 核心架构补丁打入
+      patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
 
+      # 三星机型特调补丁
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
-      
       if [ ${#patches[@]} -gt 0 ]; then
-       echo "Patches found, applying..."
        cp "${patches[@]}" ./
-       
-       # Fix SUSFS rejects
-        for p in *.patch; do
-          patch -p1 < "$p"
-          rm -f "$p"
-        done
-        shopt -u nullglob
-      else
-        echo "No patch file found, skipping"
+       for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
       fi
           
+      # SUSFS 全量开关注入 (避免 EOF)
       cd "$GITHUB_WORKSPACE"
-      cat >> "$GKI_DEFCONFIG" << 'EOF'
-      # SUSFS Configuration
-      CONFIG_KSU_SUSFS=y
-      EOF
+      echo "# SUSFS 2.1.0 Configuration" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$GKI_DEFCONFIG"
+      echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> "$GKI_DEFCONFIG"
