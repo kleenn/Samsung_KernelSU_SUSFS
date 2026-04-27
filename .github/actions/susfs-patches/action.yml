@@ -1,17 +1,51 @@
 name: apply susfs patches
 description: apply susfs patches
 inputs:
-  android_version: { required: true }
-  kernel_version: { required: true }
-  branch: { required: true }
+  android_version:
+    description: 'Android version'
+    required: true
+  kernel_version:
+    description: 'Kernel version'
+    required: true
+  branch:
+    description: 'device kernel'
+    required: true
 
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager
+   - name: Apply SUSFS to Manager (Surgical Extraction)
      shell: bash
      run: |
-       echo "🚀 SukiSU-Ultra 已原生内置 SUSFS，跳过冗余管理器补丁。"
+       cd "$COMMON/KernelSU-Next"
+       PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
+       
+       echo "🔍 正在从补丁包中物理提取 susfs.c 与 susfs.h..."
+       # 使用 awk 精准剥离源码行，绕过 patch 冲突
+       awk '/^diff --git a\/kernel\/susfs\.c/{flag=1; next} /^diff --git/{if(flag) flag=0} flag {if (/^\+/ && !/^\+\+\+/) print substr($0, 2)}' "$PATCH_FILE" > kernel/susfs.c
+       awk '/^diff --git a\/kernel\/susfs\.h/{flag=1; next} /^diff --git/{if(flag) flag=0} flag {if (/^\+/ && !/^\+\+\+/) print substr($0, 2)}' "$PATCH_FILE" > kernel/susfs.h
+       
+       # 强行注册入编译树
+       grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
+
+       # 【核心修复】：注入 SukiSU 遗漏的 SELinux 符号，彻底消除 LTO 链接崩溃
+       echo "u32 susfs_ksu_sid = 0;" >> kernel/selinux/selinux.c
+       echo "u32 susfs_init_sid = 0;" >> kernel/selinux/selinux.c
+       echo "u32 susfs_zygote_sid = 0;" >> kernel/selinux/selinux.c
+       echo "u32 susfs_priv_app_sid = 0;" >> kernel/selinux/selinux.c
+       echo "bool susfs_is_current_ksu_domain(void) { return unlikely(current_sid() == susfs_ksu_sid); }" >> kernel/selinux/selinux.c
+       echo "bool susfs_is_current_init_domain(void) { return unlikely(current_sid() == susfs_init_sid); }" >> kernel/selinux/selinux.c
+       echo "bool susfs_is_current_zygote_domain(void) { return unlikely(current_sid() == susfs_zygote_sid); }" >> kernel/selinux/selinux.c
+       echo "void susfs_set_zygote_sid(void) { security_secctx_to_secid(\"u:r:zygote:s0\", 15, &susfs_zygote_sid); }" >> kernel/selinux/selinux.c
+       echo "void susfs_set_ksu_sid(void) { security_secctx_to_secid(KERNEL_SU_CONTEXT, strlen(KERNEL_SU_CONTEXT), &susfs_ksu_sid); }" >> kernel/selinux/selinux.c
+       echo "void susfs_set_init_sid(void) { security_secctx_to_secid(\"u:r:init:s0\", 13, &susfs_init_sid); }" >> kernel/selinux/selinux.c
+       echo "void susfs_set_priv_app_sid(void) { security_secctx_to_secid(\"u:r:priv_app:s0:c512,c768\", 27, &susfs_priv_app_sid); }" >> kernel/selinux/selinux.c
+
+       # 应用 Manager 侧残留的小碎块补丁
+       SUSFS_VERSION="v2.1.0"
+       cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch . || true
+       rm -rf multi_manager.patch multi_sepolicy_fix.patch
+       for p in *.patch; do patch -p1 < "$p" && rm -f "$p" || true; done
        
    - name: Apply SUSFS to Kernel
      shell: bash
@@ -20,12 +54,12 @@ runs:
       cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
       cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
 
-      # 核心防线：C 语言空桩
+      # 三星独占防崩桩 (C Stubs)
       echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
       echo "void ksu_handle_sys_reboot(void) {}" >> fs/ksu_dummy_hooks.c
       echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
       echo "int ksu_handle_sys_read(void) { return 0; }" >> fs/ksu_dummy_hooks.c
-      echo "int ksu_handle_vfs_fstat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
+      echo "int ksu_handle_vfs_fstat(int fd, loff_t *s) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_execveat_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_handle_execveat_sucompat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_handle_execveat(void) { return 0; }" >> fs/ksu_dummy_hooks.c
@@ -33,14 +67,14 @@ runs:
       echo "int ksu_input_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
 
-      # 三星 Knox 清理
+      # 三星 Knox 安全清理
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
           
-      # 核心架构补丁
+      # 注入核心系统补丁
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
 
-      # 设备树补丁
+      # 三星设备树补丁
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       if [ ${#patches[@]} -gt 0 ]; then
@@ -48,17 +82,15 @@ runs:
        for p in *.patch; do patch -p1 < "$p" && rm -f "$p"; done
       fi
 
-      # ================= 新增：阻断静默抹除的 Kconfig 户口注册 =================
+      # 【关键】：在 Kconfig 中注册合法户口，防止被三星脚本静默剔除
       echo "config KSU_SUSFS" >> fs/Kconfig
       echo "    bool \"SUSFS Support\"" >> fs/Kconfig
       echo "    default y" >> fs/Kconfig
-      
       for conf in KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT KSU_SUSFS_SUS_KSTAT KSU_SUSFS_SUS_OVERLAYFS KSU_SUSFS_TRY_UMOUNT KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_SU; do
         echo "config $conf" >> fs/Kconfig
         echo "    bool" >> fs/Kconfig
         echo "    default y" >> fs/Kconfig
       done
-      # =====================================================================
           
       cd "$GITHUB_WORKSPACE"
       {
