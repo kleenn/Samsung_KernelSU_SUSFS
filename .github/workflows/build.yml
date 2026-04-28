@@ -169,11 +169,10 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                      # ================== 核心功能注入区 ==================
+                      #      # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
-          
           git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
           KERNEL_SRC=""
           for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
@@ -182,33 +181,25 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 【物理修复 1】：压制 ZeroMount 补丁引入的未使用标签报错
+          # 【核弹级修复】：打破 ZeroMount 的头文件循环依赖死锁！
+          # 将关键定义强行注入到内核最基础的编译头文件中，确保符号在被引用前已完全解析。
+          sed -i '1i #include <linux/types.h>\n#include <linux/assoc_array.h>' include/linux/compiler_types.h || true
+          sed -i '1i #include <linux/assoc_array.h>' include/linux/key.h || true
+          sed -i '1i #include <linux/assoc_array.h>' include/linux/cred.h || true
+          
+          # 【物理修复】：压制 ZeroMount 补丁引入的未使用标签报错
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
-
-          # 【物理修复 2】：绝对精准打击！打破 ZeroMount 的循环依赖！
-          # 不再往第一行插（容易被预处理器的防重锁屏蔽），直接贴脸插在报错行的正上方！
-          awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
-          awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
 
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
-          
-          # 【核心修复】：加上 /*，将 C 源码直接平铺放入 lib 目录，消除层级错位
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/* lib/
           
-          # 【物理修复 3】：解除三星 GKI 的私有注释
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 注册 Kconfig 户口 (防 YAML 崩溃：全量改用 echo)
           if ! grep -q "CRYPTO_LZ4KD" crypto/Kconfig; then
-            echo 'config CRYPTO_LZ4KD' >> crypto/Kconfig
-            echo '	tristate "LZ4KD compression algorithm"' >> crypto/Kconfig
-            echo '	default y' >> crypto/Kconfig
-            echo 'config CRYPTO_LZ4K_OPLUS' >> crypto/Kconfig
-            echo '	bool "OPlus LZ4K optimizations"' >> crypto/Kconfig
-            echo '	default y' >> crypto/Kconfig
+            echo -e "config CRYPTO_LZ4KD\n\ttristate \"LZ4KD compression algorithm\"\n\tdefault y\nconfig CRYPTO_LZ4K_OPLUS\n\tbool \"OPlus LZ4K optimizations\"\n\tdefault y" >> crypto/Kconfig
           fi
           
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
@@ -216,21 +207,17 @@ jobs:
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
           
-          # 【核心新增】：强制让编译系统把 LZ4KD 源码编译进内核实体！
+          # 强制链接与注册列表
           grep -q "lz4kd.o" crypto/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o" >> crypto/Makefile
           grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus.o" >> lib/Makefile
-          
-          # 确保 zcomp.c 里的字符串被正确替换，暴露给 ZRAM 软件
           sed -i 's/"lz4",/"lz4", "lz4kd",/g' drivers/block/zram/zcomp.c || true
           
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
-          # 【修正】：找回 LZ4KD 开关，注入网络等配置
           {
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-            
             echo "CONFIG_BPF_STREAM_PARSER=y"
             echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
             echo "CONFIG_NETFILTER_XT_SET=y"
