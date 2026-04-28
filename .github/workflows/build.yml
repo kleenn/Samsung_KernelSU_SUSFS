@@ -168,37 +168,8 @@ jobs:
         uses: ./.github/actions/configs
         with:
          branch: ${{ inputs.branch }}
-         
-                     # ================== 核心功能注入区 ==================
-      - name: Inject Network & LZ4KD Optimizations
-        run: |
-          cd "$CONFIG"
-          git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
-          KERNEL_SRC=""
-          for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
-            if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
-          done
-          [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
-          cd "$KERNEL_SRC"
-          
-          awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
-          awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
 
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
-          
-          sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
-          sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
-          
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
-          patch -p1 -F 3 < lz4kd.patch || true
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
-          patch -p1 -F 3 < lz4k_oplus.patch || true
-
-          # 【核弹级强插 UI】：使用 awk 绝对突破法，寻找数组起点直接暴力换行注入
-      # ================== 核心功能注入区 ==================
+                # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
