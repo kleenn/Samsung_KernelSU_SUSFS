@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                  # ================== 核心功能注入区 ==================
+                        # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -188,7 +188,9 @@ jobs:
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
+          
+          # 【核心修复】：加上 /*，将 C 源码直接平铺放入 lib 目录，消除层级错位
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/* lib/
           
           # 【物理修复】：解除三星 GKI 的私有注释
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
