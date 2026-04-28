@@ -217,8 +217,9 @@ jobs:
           echo "obj-y += lz4k_compress.o lz4k_decompress.o" > lib/lz4k/Makefile
           echo "obj-y += lz4kd_compress.o lz4kd_decompress.o" > lib/lz4kd/Makefile
 
-          # 【强插 UI 选项】：强制 ZRAM 软件可见
-          sed -i '/static const char \* const backends\[\] = {/a \	"lz4kd",\n\	"lz4k_oplus",\n\	"lz4k",' drivers/block/zram/zcomp.c || true
+          # 【强插 UI 选项】：无视三星复杂的数组宏结构，直接在原有的 lz4 后面强行挂接我们的神级算法！
+          sed -i 's/"lz4",/"lz4", "lz4kd", "lz4k_oplus", "lz4k",/g' drivers/block/zram/zcomp.c || true
+
 
           # 【无死角网络配置】：给所有 defconfig 均注入网络规则，防篡改
           find arch/arm64/configs -type f -name "*defconfig*" -exec sh -c '
