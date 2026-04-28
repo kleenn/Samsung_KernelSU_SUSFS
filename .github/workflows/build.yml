@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
          
-               # ===      # ================== 核心功能注入区 ==================
+                     # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -181,67 +181,74 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 【压制 ZeroMount 警告】
-          sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
-
-          # 【打破 ZeroMount 的头文件死锁】
           awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
           awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
 
-          # 【保持物理拓扑】：完美提取源码及目录
-          mkdir -p lib/lz4k lib/lz4kd
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/ || true
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k lib/
-          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4kd lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/*.c crypto/ || true
           
-          # 【解除三星 GKI 私有注释】
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 【应用补丁】：让原生补丁建立正确的 Makefile 路径连接
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
-          patch -p1 < lz4k_oplus.patch || true
+          patch -p1 -F 3 < lz4k_oplus.patch || true
 
-          # 【核弹级直编指令】：强制将目录连接转换为 obj-y 直编，绝不瞎改文件名！
-          sed -i 's/obj-\$(CONFIG_LZ4K_COMPRESS) += lz4k\//obj-y += lz4k\//g' lib/Makefile || true
-          sed -i 's/obj-\$(CONFIG_LZ4K_DECOMPRESS) += lz4k\//obj-y += lz4k\//g' lib/Makefile || true
-          sed -i 's/obj-\$(CONFIG_LZ4KD_COMPRESS) += lz4kd\//obj-y += lz4kd\//g' lib/Makefile || true
-          sed -i 's/obj-\$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd\//obj-y += lz4kd\//g' lib/Makefile || true
-          sed -i 's/obj-\$(CONFIG_CRYPTO_LZ4K) += lz4k.o/obj-y += lz4k.o/g' crypto/Makefile || true
-          sed -i 's/obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o/obj-y += lz4kd.o/g' crypto/Makefile || true
-
-          # 确保子目录内的 Makefile 也全部强制 Built-in
-          sed -i 's/obj-\$(.*)/obj-y/g' lib/lz4k/Makefile || true
-          sed -i 's/obj-\$(.*)/obj-y/g' lib/lz4kd/Makefile || true
-          sed -i 's/obj-\$(.*)/obj-y/g' lib/lz4k_oplus/Makefile || true
-
-          # 【ZRAM 模块化陷阱突破】
-          sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/zram/Makefile || true
-          sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/Makefile || true
-
-          # 【核弹级强插 UI】：安全替换，绝对不删系统原有的算法
-          sed -i 's/"lz4",/"lz4", "lz4kd", "lz4k_oplus", "lz4k",/g' drivers/block/zram/zcomp.c || true
+          # 【核弹级强插 UI】：使用 awk 绝对突破法，寻找数组起点直接暴力换行注入
+          awk '/static const char \* const backends\[\] = \{/{print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"lz4k\","; next}1' drivers/block/zram/zcomp.c > temp_zcomp.c && mv temp_zcomp.c drivers/block/zram/zcomp.c
 
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
           {
-            echo "CONFIG_LZ4K_COMPRESS=y"
-            echo "CONFIG_LZ4K_DECOMPRESS=y"
-            echo "CONFIG_LZ4KD_COMPRESS=y"
-            echo "CONFIG_LZ4KD_DECOMPRESS=y"
-            echo "CONFIG_CRYPTO_LZ4K=y"
+            # ===== ZRAM & LZ4KD 高阶参数 =====
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+            echo "CONFIG_ZRAM_WRITEBACK=y"
+            
+            # ===== 核心网络优化 (BBR + Westwood) =====
+            echo "CONFIG_TCP_CONG_ADVANCED=y"
+            echo "CONFIG_TCP_CONG_BBR=y"
+            echo "CONFIG_NET_SCH_FQ=y"
+            echo "CONFIG_TCP_CONG_BIC=n"
+            echo "CONFIG_TCP_CONG_WESTWOOD=y"
+            echo "CONFIG_TCP_CONG_HTCP=n"
+
+            # ===== 代理与路由分流 (Full IP_SET & TPROXY) =====
+            echo "CONFIG_BPF_STREAM_PARSER=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
+            echo "CONFIG_NETFILTER_XT_SET=y"
             echo "CONFIG_IP_SET=y"
+            echo "CONFIG_IP_SET_MAX=65534"
+            echo "CONFIG_IP_SET_BITMAP_IP=y"
+            echo "CONFIG_IP_SET_BITMAP_IPMAC=y"
+            echo "CONFIG_IP_SET_BITMAP_PORT=y"
+            echo "CONFIG_IP_SET_HASH_IP=y"
+            echo "CONFIG_IP_SET_HASH_IPMARK=y"
+            echo "CONFIG_IP_SET_HASH_IPPORT=y"
+            echo "CONFIG_IP_SET_HASH_IPPORTIP=y"
+            echo "CONFIG_IP_SET_HASH_IPPORTNET=y"
+            echo "CONFIG_IP_SET_HASH_IPMAC=y"
+            echo "CONFIG_IP_SET_HASH_MAC=y"
+            echo "CONFIG_IP_SET_HASH_NETPORTNET=y"
             echo "CONFIG_IP_SET_HASH_NET=y"
+            echo "CONFIG_IP_SET_HASH_NETNET=y"
+            echo "CONFIG_IP_SET_HASH_NETPORT=y"
+            echo "CONFIG_IP_SET_HASH_NETIFACE=y"
+            echo "CONFIG_IP_SET_LIST_SET=y"
+            echo "CONFIG_IP6_NF_NAT=y"
+            echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
+            echo "CONFIG_NETFILTER=y"
+            echo "CONFIG_NETFILTER_ADVANCED=y"
+            echo "CONFIG_NETFILTER_XTABLES=y"
             echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
-            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
             echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_MARK=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_MARK=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
           } >> "$DEFCONFIG"
 
       - name: Change Kernel Name and clean dirty
