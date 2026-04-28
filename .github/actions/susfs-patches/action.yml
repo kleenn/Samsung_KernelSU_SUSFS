@@ -8,18 +8,13 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (Orthogonal Bypass & Force Injection)
+   - name: Apply SUSFS to Manager (Independent Bypass Injection)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🔍 提取并重构物理文件..."
-       awk '/^diff --git a\/kernel\/susfs\.c/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.c
-       awk '/^diff --git a\/kernel\/susfs\.h/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.h
-       grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
-       
-       echo "🚀 执行精准 Patch 过滤与应用..."
+       echo "🚀 剔除 10 号补丁中对 supercall 的冲突修改..."
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
@@ -54,12 +49,21 @@ runs:
          echo "extern void susfs_set_current_proc_umounted(void);"
        } >> kernel/hook/setuid_hook.h
 
-       echo "🔗 挂载 SUSFS 旁路通信总线..."
+       echo "🔗 建立通信旁路并补全 LTO 缺失符号 (susfs_bypass.c)..."
        sed -i '/susfs\.o/d' kernel/Kbuild || true
        {
          echo "#include <linux/cred.h>"
          echo "#include <linux/susfs.h>"
          echo "#include \"uapi/supercall.h\""
+         
+         echo "// LTO Symbol Stubs for SukiSU"
+         echo "bool ksu_late_loaded = false;"
+         echo "void ksu_mark_running_process(int pid, bool mark) {}"
+         echo "int ksu_get_task_mark(int pid) { return 0; }"
+         echo "void ksu_set_task_mark(int pid, int mark) {}"
+         echo "void ksu_mark_all_process(int mark) {}"
+         echo "void ksu_unmark_all_process(int mark) {}"
+
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {"
          echo "    if (magic1 != 0x7f45253c) return -EINVAL;"
          echo "    if (magic2 == 0x53555346 && current_uid().val == 0) {"
@@ -77,7 +81,7 @@ runs:
          echo "            case CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: susfs_add_sus_kstat(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME"
-         echo "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;"
+         echo "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;" >> kernel/susfs_bypass.c
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG"
          echo "            case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(arg); return 0;"
@@ -111,7 +115,6 @@ runs:
       cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
       cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
 
-      # 【核心更新】：物理切除 6 个引发 LTO duplicate symbol 的冗余空壳
       echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
       echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
       echo "int ksu_execveat_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
