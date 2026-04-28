@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                        # ================== 核心功能注入区 ==================
+                              # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -182,8 +182,12 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 【物理修复】：压制 zeromount 补丁引入的未被使用标签报错
+          # 【物理修复 1】：压制 ZeroMount 补丁引入的未使用标签报错
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
+
+          # 【物理修复 2】：打破 ZeroMount 造成的头文件循环依赖，抢先注入 assoc_array.h 闭环
+          sed -i '1i #include <linux/assoc_array.h>' include/linux/key.h || true
+          sed -i '1i #include <linux/assoc_array.h>' include/linux/cred.h || true
 
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
@@ -192,7 +196,7 @@ jobs:
           # 【核心修复】：加上 /*，将 C 源码直接平铺放入 lib 目录，消除层级错位
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/* lib/
           
-          # 【物理修复】：解除三星 GKI 的私有注释
+          # 【物理修复 3】：解除三星 GKI 的私有注释
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
