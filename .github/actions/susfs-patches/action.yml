@@ -8,13 +8,18 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (Independent Bypass Injection)
+   - name: Apply SUSFS to Manager (IOCTL Routing Bypass)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🚀 剔除 10 号补丁中对 supercall 的冲突修改..."
+       echo "🚀 提取 SUSFS 宏定义并注入 SukiSU 的 supercall.h..."
+       # 强行提取 10 号补丁中的 CMD_SUSFS 宏，闭合头文件断层
+       grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/include/uapi/supercall.h || true
+       grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/uapi/supercall.h || true
+
+       echo "🚀 剔除 10 号补丁对 supercall 的破坏性修改..."
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
@@ -49,8 +54,9 @@ runs:
          echo "extern void susfs_set_current_proc_umounted(void);"
        } >> kernel/hook/setuid_hook.h
 
-       echo "🔗 建立通信旁路并补全 LTO 缺失符号 (susfs_bypass.c)..."
+       echo "🔗 建立绝对合法的 IOCTL 通信旁路 (susfs_bypass.c)..."
        sed -i '/susfs\.o/d' kernel/Kbuild || true
+       
        {
          echo "#include <linux/cred.h>"
          echo "#include <linux/susfs.h>"
@@ -64,49 +70,55 @@ runs:
          echo "void ksu_mark_all_process(int mark) {}"
          echo "void ksu_unmark_all_process(int mark) {}"
 
-         echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {"
-         echo "    if (magic1 != 0x7f45253c) return -EINVAL;"
-         echo "    if (magic2 == 0x53555346 && current_uid().val == 0) {"
-         echo "        switch(cmd) {"
+         echo "// 原生 sys_reboot 兜底"
+         echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) { return -EINVAL; }"
+         
+         echo "// 真正的 IOCTL 处理器 (拦截 SukiSU 通信)"
+         echo "int ksu_handle_susfs_ioctl(unsigned int cmd, void __user *arg) {"
+         echo "    if (current_uid().val != 0) return -ENOTTY;"
+         echo "    switch(cmd) {"
          echo "#ifdef CONFIG_KSU_SUSFS_SUS_PATH"
-         echo "            case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(arg); return 0;"
-         echo "            case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT"
-         echo "            case CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(arg); return 0;"
+         echo "        case CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT"
-         echo "            case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(arg); return 0;"
-         echo "            case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(arg); return 0;"
-         echo "            case CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: susfs_add_sus_kstat(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(arg); return 0;"
+         echo "        case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: susfs_add_sus_kstat(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME"
-         echo "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;" >> kernel/susfs_bypass.c
+         echo "        case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG"
-         echo "            case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(arg); return 0;"
+         echo "        case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG"
-         echo "            case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(arg); return 0;"
+         echo "        case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT"
-         echo "            case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(arg); return 0;"
          echo "#endif"
          echo "#ifdef CONFIG_KSU_SUSFS_SUS_MAP"
-         echo "            case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(arg); return 0;"
+         echo "        case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(arg); return 0;"
          echo "#endif"
-         echo "            case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(arg); return 0;"
-         echo "            case CMD_SUSFS_SHOW_ENABLED_FEATURES: susfs_get_enabled_features(arg); return 0;"
-         echo "            case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(arg); return 0;"
-         echo "            case CMD_SUSFS_SHOW_VERSION: susfs_show_version(arg); return 0;"
-         echo "            default: return -EINVAL;"
-         echo "        }"
+         echo "        case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(arg); return 0;"
+         echo "        case CMD_SUSFS_SHOW_ENABLED_FEATURES: susfs_get_enabled_features(arg); return 0;"
+         echo "        case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(arg); return 0;"
+         echo "        case CMD_SUSFS_SHOW_VERSION: susfs_show_version(arg); return 0;"
+         echo "        default: return -ENOTTY;"
          echo "    }"
-         echo "    return -EINVAL;"
          echo "}"
        } > kernel/susfs_bypass.c
        
        grep -q "susfs_bypass.o" kernel/Kbuild || echo "obj-y += susfs_bypass.o" >> kernel/Kbuild
+       
+       echo "🎯 劫持 dispatch.c IOCTL 入口..."
+       sed -i '/long ksu_supercall_handle_ioctl(unsigned int cmd, void __user \*argp)/a \
+       extern int ksu_handle_susfs_ioctl(unsigned int cmd, void __user *arg);\n\
+       { int ret = ksu_handle_susfs_ioctl(cmd, argp); if (ret != -ENOTTY) return ret; }' kernel/supercall/dispatch.c || true
 
    - name: Apply SUSFS to Kernel (Knox Armor-Piercing)
      shell: bash
