@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
          
-        # ================== 核心功能注入区 ==================
+              # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -182,40 +182,38 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 【物理修复 1】：压制 ZeroMount 警告
+          # 【物理修复】：压制 ZeroMount 补丁残留的未使用标签报错（即使不开启 ZM 也加上防爆）
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
 
-          # 【精准物理投放】：直接拷贝整个文件夹，保持与 Patch 的拓扑结构 100% 一致！
+          # 【目录重建与纯净源码投放】
+          mkdir -p lib/lz4k lib/lz4kd
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/ || true
-          
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k lib/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4kd lib/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
-          
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/*.c crypto/ || true
           
-          # 【物理修复 2】：解除三星 GKI 的私有注释，放行补丁
+          # 【物理修复】：解除三星 GKI 的私有注释
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 【挂载补丁】：应用作者原生补丁
+          # 【挂载补丁】：应用 LZ4KD 原生补丁
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
-          
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
           
-          # 【物理补偿】：针对三星私有化 ZRAM Kconfig 导致补丁 Reject，手动注入 UI 选项
-          if ! grep -q "ZRAM_DEF_COMP_LZ4KD" drivers/block/zram/Kconfig; then
-            sed -i '/config ZRAM_DEF_COMP_LZ4HC/a config ZRAM_DEF_COMP_LZ4K\n\tbool "lz4k"\n\tdepends on CRYPTO_LZ4K\nconfig ZRAM_DEF_COMP_LZ4K_OPLUS\n\tbool "lz4k_oplus"\n\tdepends on CRYPTO_LZ4K_OPLUS\nconfig ZRAM_DEF_COMP_LZ4KD\n\tbool "lz4kd"\n\tdepends on CRYPTO_LZ4KD' drivers/block/zram/Kconfig || true
-            sed -i '/default "lz4hc" if ZRAM_DEF_COMP_LZ4HC/a \tdefault "lz4k" if ZRAM_DEF_COMP_LZ4K\n\tdefault "lz4k_oplus" if ZRAM_DEF_COMP_LZ4K_OPLUS\n\tdefault "lz4kd" if ZRAM_DEF_COMP_LZ4KD' drivers/block/zram/Kconfig || true
-          fi
+          # 【清除补丁污染并强制链接 LZ4KD】
+          sed -i '/lz4k_oplus/d' lib/Kconfig || true
+          sed -i '/lz4k_oplus\//d' lib/Makefile || true
+          grep -q "lz4kd.o" crypto/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o" >> crypto/Makefile
+          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus.o" >> lib/Makefile
+          sed -i 's/"lz4",/"lz4", "lz4kd",/g' drivers/block/zram/zcomp.c || true
 
-          # 【Defconfig 注入】：寻找并绑定局部配置文件
+          # 【Defconfig 纯净注入】：移除所有 ZeroMount 配置，仅保留网络和算法
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
-          # 【核心修复】：使用局部变量 $DEFCONFIG 进行安全追加
           {
             echo "CONFIG_LZ4K_COMPRESS=y"
             echo "CONFIG_LZ4K_DECOMPRESS=y"
@@ -225,7 +223,7 @@ jobs:
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
             
-            # 网络层优化参数
+            # 纯净的网络层优化参数
             echo "CONFIG_IP_SET=y"
             echo "CONFIG_IP_SET_HASH_NET=y"
             echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
