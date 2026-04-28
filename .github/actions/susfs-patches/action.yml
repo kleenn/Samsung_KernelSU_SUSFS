@@ -8,13 +8,13 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (IOCTL Routing Bypass)
+   - name: Apply SUSFS to Manager (IOCTL Routing Bypass & Safe Injection)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🚀 提取 SUSFS 宏定义并注入 supercall.h..."
+       echo "🚀 提取 SUSFS 宏定义并注入 SukiSU 的 supercall.h..."
        grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/include/uapi/supercall.h || true
        grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/uapi/supercall.h || true
 
