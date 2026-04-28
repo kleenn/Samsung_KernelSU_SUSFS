@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
          
-      # ================== 核心功能注入区 ==================
+        # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -186,7 +186,6 @@ jobs:
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
 
           # 【精准物理投放】：直接拷贝整个文件夹，保持与 Patch 的拓扑结构 100% 一致！
-          # 绝不使用 /* 铺平，彻底杜绝覆盖内核系统主 Makefile 的灾难。
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/ || true
           
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k lib/
@@ -199,16 +198,24 @@ jobs:
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 【挂载补丁】：应用作者原生补丁，让系统自动识别子目录
+          # 【挂载补丁】：应用作者原生补丁
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
           
-          # 【Defconfig 注入】：启用所有新特性与网络分流
+          # 【物理补偿】：针对三星私有化 ZRAM Kconfig 导致补丁 Reject，手动注入 UI 选项
+          if ! grep -q "ZRAM_DEF_COMP_LZ4KD" drivers/block/zram/Kconfig; then
+            sed -i '/config ZRAM_DEF_COMP_LZ4HC/a config ZRAM_DEF_COMP_LZ4K\n\tbool "lz4k"\n\tdepends on CRYPTO_LZ4K\nconfig ZRAM_DEF_COMP_LZ4K_OPLUS\n\tbool "lz4k_oplus"\n\tdepends on CRYPTO_LZ4K_OPLUS\nconfig ZRAM_DEF_COMP_LZ4KD\n\tbool "lz4kd"\n\tdepends on CRYPTO_LZ4KD' drivers/block/zram/Kconfig || true
+            sed -i '/default "lz4hc" if ZRAM_DEF_COMP_LZ4HC/a \tdefault "lz4k" if ZRAM_DEF_COMP_LZ4K\n\tdefault "lz4k_oplus" if ZRAM_DEF_COMP_LZ4K_OPLUS\n\tdefault "lz4kd" if ZRAM_DEF_COMP_LZ4KD' drivers/block/zram/Kconfig || true
+          fi
+
+          # 【Defconfig 注入】：寻找并绑定局部配置文件
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
+          
+          # 【核心修复】：使用局部变量 $DEFCONFIG 进行安全追加
           {
             echo "CONFIG_LZ4K_COMPRESS=y"
             echo "CONFIG_LZ4K_DECOMPRESS=y"
@@ -224,7 +231,7 @@ jobs:
             echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
             echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
             echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
-          } >> "$GKI_DEFCONFIG"
+          } >> "$DEFCONFIG"
 
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
