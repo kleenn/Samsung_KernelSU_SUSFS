@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
          
-                     # ================== 核心功能注入区 ==================
+               # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -207,15 +207,16 @@ jobs:
           sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/zram/Makefile
           sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/Makefile
           
-          # 强制链接实体
+          # 强制链接外层目录
           grep -q "lz4kd.o" crypto/Makefile || echo "obj-y += lz4kd.o" >> crypto/Makefile
           grep -q "lz4k.o" crypto/Makefile || echo "obj-y += lz4k.o" >> crypto/Makefile
           grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-y += lz4k_oplus.o" >> lib/Makefile
           grep -q "lz4k\/" lib/Makefile || echo "obj-y += lz4k/" >> lib/Makefile
           grep -q "lz4kd\/" lib/Makefile || echo "obj-y += lz4kd/" >> lib/Makefile
           
-          echo "obj-y += lz4k_compress.o lz4k_decompress.o" > lib/lz4k/Makefile
-          echo "obj-y += lz4kd_compress.o lz4kd_decompress.o" > lib/lz4kd/Makefile
+          # 【修正点：使用原生 Makefile 文件名，强行转换所有算法为 Built-in】
+          sed -i 's/obj-\$(.*)/obj-y/g' lib/lz4k/Makefile || true
+          sed -i 's/obj-\$(.*)/obj-y/g' lib/lz4kd/Makefile || true
 
           # 【核弹级强插 UI】：安全替换，绝对不删系统原有的算法
           sed -i 's/"lz4",/"lz4", "lz4kd", "lz4k_oplus", "lz4k",/g' drivers/block/zram/zcomp.c || true
