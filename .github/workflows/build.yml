@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-      # ================== 核心功能注入区 ==================
+            # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -205,6 +205,12 @@ jobs:
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
+          
+          # 【核心新增】：强制让编译系统把 LZ4KD 源码编译进内核实体！
+          grep -q "lz4kd.o" crypto/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o" >> crypto/Makefile
+          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus.o" >> lib/Makefile
+          
+          # 确保 zcomp.c 里的字符串被正确替换，暴露给 ZRAM 软件
           sed -i 's/"lz4",/"lz4", "lz4kd",/g' drivers/block/zram/zcomp.c || true
           
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
