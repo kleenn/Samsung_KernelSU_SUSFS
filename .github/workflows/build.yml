@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
          
-               # ================== 核心功能注入区 ==================
+                     # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -203,11 +203,11 @@ jobs:
           sed -i '/lz4k_oplus/d' lib/Kconfig || true
           sed -i '/lz4k_oplus\//d' lib/Makefile || true
 
-          # 【核弹级直编指令】：强制转换 ZRAM 为内建(vmlinux)驱动，无视 vendor 模块
+          # 强制转换 ZRAM 为直编驱动
           sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/zram/Makefile
           sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/Makefile
           
-          # 【强制链接】：硬编码编入压缩算法实体
+          # 强制链接实体
           grep -q "lz4kd.o" crypto/Makefile || echo "obj-y += lz4kd.o" >> crypto/Makefile
           grep -q "lz4k.o" crypto/Makefile || echo "obj-y += lz4k.o" >> crypto/Makefile
           grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-y += lz4k_oplus.o" >> lib/Makefile
@@ -217,18 +217,26 @@ jobs:
           echo "obj-y += lz4k_compress.o lz4k_decompress.o" > lib/lz4k/Makefile
           echo "obj-y += lz4kd_compress.o lz4kd_decompress.o" > lib/lz4kd/Makefile
 
-          # 【强插 UI 选项】：无视三星复杂的数组宏结构，直接在原有的 lz4 后面强行挂接我们的神级算法！
+          # 【核弹级强插 UI】：安全替换，绝对不删系统原有的算法
           sed -i 's/"lz4",/"lz4", "lz4kd", "lz4k_oplus", "lz4k",/g' drivers/block/zram/zcomp.c || true
 
-
-          # 【无死角网络配置】：给所有 defconfig 均注入网络规则，防篡改
-          find arch/arm64/configs -type f -name "*defconfig*" -exec sh -c '
-            echo "CONFIG_IP_SET=y" >> "$1"
-            echo "CONFIG_IP_SET_HASH_NET=y" >> "$1"
-            echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$1"
-            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" >> "$1"
-            echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" >> "$1"
-          ' _ {} \;
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
+          
+          {
+            echo "CONFIG_LZ4K_COMPRESS=y"
+            echo "CONFIG_LZ4K_DECOMPRESS=y"
+            echo "CONFIG_LZ4KD_COMPRESS=y"
+            echo "CONFIG_LZ4KD_DECOMPRESS=y"
+            echo "CONFIG_CRYPTO_LZ4K=y"
+            echo "CONFIG_CRYPTO_LZ4KD=y"
+            echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+            echo "CONFIG_IP_SET=y"
+            echo "CONFIG_IP_SET_HASH_NET=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
+            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
+            echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+          } >> "$DEFCONFIG"
 
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
