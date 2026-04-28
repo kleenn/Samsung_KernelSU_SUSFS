@@ -65,9 +65,9 @@ runs:
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
 
-      # 【神级护航】：将 SUSFS 初始化与 KSU 完全解绑，硬连接到 Linux 创世点 mnt_init！
+      # 【神级护航】：修复了 AWK 注入逻辑，精准对齐大括号，完美植入 mnt_init 内部
       echo "🚀 锚定 VFS 创世阶段，强制唤醒 SUSFS..."
-      awk '/void __init mnt_init\(void\)/{print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' fs/namespace.c > temp_ns_init.c && mv temp_ns_init.c fs/namespace.c
+      awk '/void __init mnt_init\(void\)/{print; getline; print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' fs/namespace.c > temp_ns_init.c && mv temp_ns_init.c fs/namespace.c
 
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
