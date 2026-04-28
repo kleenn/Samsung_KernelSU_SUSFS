@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                # ================== 核心功能注入区 ==================
+      # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -189,15 +189,29 @@ jobs:
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
           
-          sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
-          sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
+          # 【Kconfig 免疫护盾】：提前备份三星原生核心配置树，防止被 OnePlus 补丁污染导致 ZRAM 消失！
+          cp drivers/block/zram/Kconfig drivers/block/zram/Kconfig.bak
+          cp lib/Kconfig lib/Kconfig.bak
+          cp crypto/Kconfig crypto/Kconfig.bak
           
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
 
-          # 【核弹级强插 UI】：无视所有宏限制，直接用 awk 在数组最前端硬插！
+          # 【Kconfig 还原】：覆盖回去，确保 CONFIG_ZRAM 绝对存活！
+          mv drivers/block/zram/Kconfig.bak drivers/block/zram/Kconfig
+          mv lib/Kconfig.bak lib/Kconfig
+          mv crypto/Kconfig.bak crypto/Kconfig
+
+          # 确保外围依赖链接正常
+          grep -q "lz4kd.o" crypto/Makefile || echo "obj-y += lz4kd.o" >> crypto/Makefile
+          grep -q "lz4k.o" crypto/Makefile || echo "obj-y += lz4k.o" >> crypto/Makefile
+          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-y += lz4k_oplus.o" >> lib/Makefile
+          grep -q "lz4k\/" lib/Makefile || echo "obj-y += lz4k/" >> lib/Makefile
+          grep -q "lz4kd\/" lib/Makefile || echo "obj-y += lz4kd/" >> lib/Makefile
+
+          # 强插 UI 选项
           awk '/static const char \* const backends\[\] = \{/{print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"lz4k\","; next}1' drivers/block/zram/zcomp.c > temp_zcomp.c && mv temp_zcomp.c drivers/block/zram/zcomp.c
 
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
@@ -295,17 +309,18 @@ jobs:
             ./AnyKernel3/**
           compression-level: 9
 
-      - name: "📝 Extract Compiled Modules | 提取 zram 等动态内核模块"
+      - name: "📝 Extract Compiled Modules | 提取独立驱动模块"
         run: |
-          echo "🌐 正在提取独立驱动模块..."
+          echo "🌐 正在进行工作区全域扫描提取..."
           mkdir -p ./Extract-Modules
-          find ./kernel_workspace/kernel_platform/ -name "zram.ko" -exec cp {} ./Extract-Modules/ \; || echo "No zram.ko"
-          find ./kernel_workspace/kernel_platform/ -name "lz4*.ko" -exec cp {} ./Extract-Modules/ \; || echo "No lz4.ko"
+          # 使用 $GITHUB_WORKSPACE 绝对路径全盘搜索，无惧相对路径偏移
+          find $GITHUB_WORKSPACE -type f -name "zram.ko" -exec cp {} ./Extract-Modules/ \; || echo "No zram.ko"
+          find $GITHUB_WORKSPACE -type f -name "lz4*.ko" -exec cp {} ./Extract-Modules/ \; || echo "No lz4*.ko"
 
       - name: "📤 Upload Modules | 上传模块产物"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.FEIL }}_Modules
+          name: Kernel_Modules_${{ inputs.kernel_version }}
           path: ./Extract-Modules/*
 
       - name: Scan and collect patch rejects
