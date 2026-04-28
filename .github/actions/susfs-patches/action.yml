@@ -8,7 +8,7 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager & Force Ignition
+   - name: Apply SUSFS to Manager & KSU
      shell: bash
      run: |
        cd "$GITHUB_WORKSPACE/susfs4ksu"
@@ -32,12 +32,9 @@ runs:
        rm -rf multi_manager.patch multi_sepolicy_fix.patch
        for p in *.patch; do patch -p1 < "$p" || true; done
 
-       echo "🔨 启动架构级语法强控修复与强制点火..."
        sed -i 's/do_umount:/do_umount:;/g' kernel/hook/setuid_hook.c || true
-
-       # 【核弹级修复 1】：强制向 ksu_core_init 注入 SUSFS 的点火开关，终结开机休眠
-       awk '/int ksu_core_init\(void\)/{print; getline; print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
-
+       
+       # 还原常规依赖
        sed -i '/#include "feature\/adb_root.h"/a #include "hook\/setuid_hook.h"' kernel/core/init.c || true
        sed -i '/#include "hook\/setuid_hook.h"/a #include "feature\/sucompat.h"' kernel/core/init.c || true
        sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
@@ -49,66 +46,7 @@ runs:
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
 
-       echo "🔗 重塑神级旁路：解决 SukiSU 缺失符号编译熔断，建立 IOCTL 通信隧道..."
-       sed -i '/susfs\.o/d' kernel/Kbuild || true
-       {
-         echo "#include <linux/cred.h>"
-         echo "#include <linux/susfs.h>"
-         echo "#include \"uapi/supercall.h\""
-         
-         echo "// LTO Symbol Stubs for SukiSU (填补防检测引发的符号空洞)"
-         echo "bool ksu_late_loaded = false;"
-         echo "void ksu_mark_running_process(int pid, bool mark) {}"
-         echo "int ksu_get_task_mark(int pid) { return 0; }"
-         echo "void ksu_set_task_mark(int pid, int mark) {}"
-         echo "void ksu_mark_all_process(int mark) {}"
-         echo "void ksu_unmark_all_process(int mark) {}"
-
-         echo "// 全量无条件 IOCTL 处理器 (无视残废 Kconfig 宏，强制打通 CLI 隧道)"
-         echo "int ksu_handle_susfs_ioctl(unsigned int cmd, void __user *arg) {"
-         echo "    if (current_uid().val != 0) return -ENOTTY;"
-         echo "    switch(cmd) {"
-         echo "        case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(arg); return 0;"
-         echo "        case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(arg); return 0;"
-         echo "        case CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(arg); return 0;"
-         echo "        case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(arg); return 0;"
-         echo "        case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(arg); return 0;"
-         echo "        case CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: susfs_add_sus_kstat(arg); return 0;"
-         echo "        case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;"
-         echo "        case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(arg); return 0;"
-         echo "        case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(arg); return 0;"
-         echo "        case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(arg); return 0;"
-         echo "        case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(arg); return 0;"
-         echo "        case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(arg); return 0;"
-         echo "        case CMD_SUSFS_SHOW_ENABLED_FEATURES: susfs_get_enabled_features(arg); return 0;"
-         echo "        case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(arg); return 0;"
-         echo "        case CMD_SUSFS_SHOW_VERSION: susfs_show_version(arg); return 0;"
-         echo "        default: return -ENOTTY;"
-         echo "    }"
-         echo "}"
-         
-         echo "// 劫持 Reboot 通信模式，拦截所有 SUSFS 命令行调用"
-         echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {"
-         echo "    if (magic1 != 0x7f45253c || magic2 != 0x53555346) return -EINVAL;"
-         echo "    return ksu_handle_susfs_ioctl(cmd, *arg);"
-         echo "}"
-       } > kernel/susfs_bypass.c
-       
-       grep -q "susfs_bypass.o" kernel/Kbuild || echo "obj-y += susfs_bypass.o" >> kernel/Kbuild
-       
-       awk '
-       /long ksu_supercall_handle_ioctl/ { in_func=1 }
-       {
-           print $0
-           if (in_func && $0 ~ /{/) {
-               print "    extern int ksu_handle_susfs_ioctl(unsigned int cmd, void __user *arg);"
-               print "    int __sus_ret = ksu_handle_susfs_ioctl(cmd, argp);"
-               print "    if (__sus_ret != -ENOTTY) return __sus_ret;"
-               in_func=0
-           }
-       }' kernel/supercall/dispatch.c > temp_dispatch.c && mv temp_dispatch.c kernel/supercall/dispatch.c
-
-   - name: Apply SUSFS to Kernel (Knox Armor-Piercing)
+   - name: Apply SUSFS to Kernel & VFS Absolute Ignition
      shell: bash
      run: |
       cd "$COMMON"
@@ -127,6 +65,10 @@ runs:
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
 
+      # 【神级护航】：将 SUSFS 初始化与 KSU 完全解绑，硬连接到 Linux 创世点 mnt_init！
+      echo "🚀 锚定 VFS 创世阶段，强制唤醒 SUSFS..."
+      awk '/void __init mnt_init\(void\)/{print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' fs/namespace.c > temp_ns_init.c && mv temp_ns_init.c fs/namespace.c
+
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       if [ ${#patches[@]} -gt 0 ]; then
@@ -134,7 +76,6 @@ runs:
        for p in *.patch; do patch -p1 < "$p" || true; done
       fi
 
-      # 【核弹级修复 2】：强制编入 susfs 实体
       grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
           
       cd "$GITHUB_WORKSPACE"
