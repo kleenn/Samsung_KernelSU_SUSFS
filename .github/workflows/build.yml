@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-                              # ================== 核心功能注入区 ==================
+                      # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -185,9 +185,10 @@ jobs:
           # 【物理修复 1】：压制 ZeroMount 补丁引入的未使用标签报错
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
 
-          # 【物理修复 2】：打破 ZeroMount 造成的头文件循环依赖，抢先注入 assoc_array.h 闭环
-          sed -i '1i #include <linux/assoc_array.h>' include/linux/key.h || true
-          sed -i '1i #include <linux/assoc_array.h>' include/linux/cred.h || true
+          # 【物理修复 2】：绝对精准打击！打破 ZeroMount 的循环依赖！
+          # 不再往第一行插（容易被预处理器的防重锁屏蔽），直接贴脸插在报错行的正上方！
+          awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
+          awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
 
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
