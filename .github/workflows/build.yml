@@ -169,7 +169,7 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-      # ================== 核心功能注入区 ==================
+            # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
@@ -189,39 +189,40 @@ jobs:
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
           
-          # 【Kconfig 免疫护盾】：提前备份三星原生核心配置树，防止被 OnePlus 补丁污染导致 ZRAM 消失！
+          # 【Kconfig 免疫护盾】：提前备份三星原生核心配置树
           cp drivers/block/zram/Kconfig drivers/block/zram/Kconfig.bak
           cp lib/Kconfig lib/Kconfig.bak
           cp crypto/Kconfig crypto/Kconfig.bak
           
+          # 【应用补丁】：只取它对 C 源码和 Makefile 的正确映射
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 -F 3 < lz4k_oplus.patch || true
 
-          # 【Kconfig 还原】：覆盖回去，确保 CONFIG_ZRAM 绝对存活！
+          # 【Kconfig 还原】：覆盖回去，坚决不让外挂 Kconfig 污染三星配置树
           mv drivers/block/zram/Kconfig.bak drivers/block/zram/Kconfig
           mv lib/Kconfig.bak lib/Kconfig
           mv crypto/Kconfig.bak crypto/Kconfig
 
-          # 确保外围依赖链接正常
-          grep -q "lz4kd.o" crypto/Makefile || echo "obj-y += lz4kd.o" >> crypto/Makefile
-          grep -q "lz4k.o" crypto/Makefile || echo "obj-y += lz4k.o" >> crypto/Makefile
-          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-y += lz4k_oplus.o" >> lib/Makefile
-          grep -q "lz4k\/" lib/Makefile || echo "obj-y += lz4k/" >> lib/Makefile
-          grep -q "lz4kd\/" lib/Makefile || echo "obj-y += lz4kd/" >> lib/Makefile
-
-          # 强插 UI 选项
+          # 【强插 UI 选项】：使用 awk 在 ZRAM 算法列表中直接注入神级算法
           awk '/static const char \* const backends\[\] = \{/{print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"lz4k\","; next}1' drivers/block/zram/zcomp.c > temp_zcomp.c && mv temp_zcomp.c drivers/block/zram/zcomp.c
 
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
           {
+            # ===== 算法开关矩阵 =====
+            echo "CONFIG_LZ4K_COMPRESS=y"
+            echo "CONFIG_LZ4K_DECOMPRESS=y"
+            echo "CONFIG_LZ4KD_COMPRESS=y"
+            echo "CONFIG_LZ4KD_DECOMPRESS=y"
+            echo "CONFIG_CRYPTO_LZ4K=y"
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
             echo "CONFIG_ZRAM_WRITEBACK=y"
             
+            # ===== 核心网络优化 (BBR + Westwood) =====
             echo "CONFIG_TCP_CONG_ADVANCED=y"
             echo "CONFIG_TCP_CONG_BBR=y"
             echo "CONFIG_NET_SCH_FQ=y"
@@ -229,6 +230,7 @@ jobs:
             echo "CONFIG_TCP_CONG_WESTWOOD=y"
             echo "CONFIG_TCP_CONG_HTCP=n"
 
+            # ===== 代理与路由分流 (Full IP_SET & TPROXY) =====
             echo "CONFIG_BPF_STREAM_PARSER=y"
             echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
             echo "CONFIG_NETFILTER_XT_SET=y"
