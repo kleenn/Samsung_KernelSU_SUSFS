@@ -48,12 +48,12 @@ runs:
        echo "extern void susfs_run_sus_path_loop(void);" >> kernel/hook/setuid_hook.h
        echo "extern void susfs_set_current_proc_umounted(void);" >> kernel/hook/setuid_hook.h
        
-       # 【新增】修复 5：物理切除 app_profile.c 中因 SukiSU 删减 tp_marker 导致的未使用变量与未声明函数
-       sed -i '/struct task_struct \*p = current;/d' kernel/policy/app_profile.c || true
-       sed -i '/struct task_struct \*t;/d' kernel/policy/app_profile.c || true
-       sed -i '/ksu_set_task_tracepoint_flag/d' kernel/policy/app_profile.c || true
-       
-       # (注：上一轮多余的 selinux.c 手动注入块已被彻底删除)
+       # 【终极修复 5】：优雅压制 app_profile.c 的报错，绝不误删物理作用域
+       # 将变量标记为可能未使用，绕过 -Werror
+       sed -i 's/struct task_struct \*p = current;/struct task_struct __attribute__((unused)) \*p = current;/g' kernel/policy/app_profile.c || true
+       sed -i 's/struct task_struct \*t;/struct task_struct __attribute__((unused)) \*t;/g' kernel/policy/app_profile.c || true
+       # 给失效的挂载钩子创建一个空宏，让底层调用自然通过
+       sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
 
    - name: Apply SUSFS to Kernel
      shell: bash
