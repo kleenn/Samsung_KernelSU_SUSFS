@@ -168,11 +168,12 @@ jobs:
         uses: ./.github/actions/configs
         with:
          branch: ${{ inputs.branch }}
-
-               # ================== 核心功能注入区 ==================
+         
+      # ================== 核心功能注入区 ==================
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
+          
           git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
           KERNEL_SRC=""
           for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
@@ -184,40 +185,28 @@ jobs:
           # 【物理修复 1】：压制 ZeroMount 警告
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
 
-          # 【物理修复 2】：建立符合补丁预期的目录结构
-          mkdir -p lib/lz4k lib/lz4kd
+          # 【精准物理投放】：直接拷贝整个文件夹，保持与 Patch 的拓扑结构 100% 一致！
+          # 绝不使用 /* 铺平，彻底杜绝覆盖内核系统主 Makefile 的灾难。
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/ || true
           
-          # 【精准源码提取】：严格按照 Patch 的物理平面进行投放
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k_compress.c lib/lz4k/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k_decompress.c lib/lz4k/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4kd_compress.c lib/lz4kd/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4kd_decompress.c lib/lz4kd/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/lz4k.c crypto/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/lz4kd.c crypto/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/lz4k_oplus.c lib/
-          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/lz4k_oplus.h lib/ 2>/dev/null || true
-
-          # 【物理修复 3】：建立私有的子 Makefile，闭合 Patch 的跳转逻辑
-          echo "obj-\$(CONFIG_LZ4K_COMPRESS) += lz4k_compress.o" > lib/lz4k/Makefile
-          echo "obj-\$(CONFIG_LZ4K_DECOMPRESS) += lz4k_decompress.o" >> lib/lz4k/Makefile
-          echo "obj-\$(CONFIG_LZ4KD_COMPRESS) += lz4kd_compress.o" > lib/lz4kd/Makefile
-          echo "obj-\$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd_decompress.o" >> lib/lz4kd/Makefile
-
-          # 【核弹级配置注入】：绕过危险的 source 命令，直接在原生 Kconfig 树中注册身份
-          # 1. 注入 lib/Kconfig
-          sed -i '/config LZ4_DECOMPRESS/a config LZ4K_COMPRESS\n\ttristate\nconfig LZ4K_DECOMPRESS\n\ttristate\nconfig LZ4KD_COMPRESS\n\ttristate\nconfig LZ4KD_DECOMPRESS\n\ttristate\nconfig CRYPTO_LZ4K_OPLUS\n\tbool "OPlus LZ4K optimizations"\n\tdefault y' lib/Kconfig
-          # 2. 注入 crypto/Kconfig
-          sed -i '/config CRYPTO_LZ4HC/i config CRYPTO_LZ4K\n\ttristate "LZ4K"\n\tselect CRYPTO_ALGAPI\n\tselect CRYPTO_ACOMP2\n\tselect LZ4K_COMPRESS\n\tselect LZ4K_DECOMPRESS\n\nconfig CRYPTO_LZ4KD\n\ttristate "LZ4KD"\n\tselect CRYPTO_ALGAPI\n\tselect CRYPTO_ACOMP2\n\tselect LZ4KD_COMPRESS\n\tselect LZ4KD_DECOMPRESS\n' crypto/Kconfig
-
-          # 【构建链绑定】：在原生 Makefile 中注册新算法
-          sed -i '/obj-$(CONFIG_LZ4_DECOMPRESS)/a obj-$(CONFIG_LZ4K_COMPRESS) += lz4k/\nobj-$(CONFIG_LZ4K_DECOMPRESS) += lz4k/\nobj-$(CONFIG_LZ4KD_COMPRESS) += lz4kd/\nobj-$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd/\nobj-y += lz4k_oplus.o' lib/Makefile
-          sed -i '/obj-$(CONFIG_CRYPTO_LZ4HC)/a obj-$(CONFIG_CRYPTO_LZ4K) += lz4k.o\nobj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' crypto/Makefile
-
-          # 【物理识别打通】：强行在 ZRAM 后端注册字符串，让 ZRAM 软件能看到它们
-          sed -i '/"lz4",/a \t"lz4k",\n\t"lz4k_oplus",\n\t"lz4kd",' drivers/block/zram/zcomp.c || true
-
-          # 【Defconfig 注入】：启用所有新特性
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4kd lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
+          
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/*.c crypto/ || true
+          
+          # 【物理修复 2】：解除三星 GKI 的私有注释，放行补丁
+          sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
+          sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
+          
+          # 【挂载补丁】：应用作者原生补丁，让系统自动识别子目录
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
+          patch -p1 -F 3 < lz4kd.patch || true
+          
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
+          patch -p1 -F 3 < lz4k_oplus.patch || true
+          
+          # 【Defconfig 注入】：启用所有新特性与网络分流
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           {
@@ -228,6 +217,7 @@ jobs:
             echo "CONFIG_CRYPTO_LZ4K=y"
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+            
             # 网络层优化参数
             echo "CONFIG_IP_SET=y"
             echo "CONFIG_IP_SET_HASH_NET=y"
