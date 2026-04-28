@@ -8,17 +8,17 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (IOCTL Routing Bypass & Safe Injection)
+   - name: Apply SUSFS to Manager (IOCTL Routing Bypass & Atomic Fix)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🚀 提取 SUSFS 宏定义并注入 SukiSU 的 supercall.h..."
+       echo "🚀 提取 SUSFS 宏定义并注入 supercall.h..."
        grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/include/uapi/supercall.h || true
        grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' >> kernel/uapi/supercall.h || true
 
-       echo "🚀 剔除 10 号补丁对 supercall 的破坏性修改..."
+       echo "🚀 剔除 10 号补丁冲突区并应用补丁..."
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
@@ -35,14 +35,11 @@ runs:
        sed -i '/#include "hook\/setuid_hook.h"/a #include "feature\/sucompat.h"' kernel/core/init.c || true
        sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
        sed -i '/#include <linux\/moduleparam.h>/a #include <linux\/susfs.h>' kernel/core/init.c || true
-       
        sed -i '/write_sulog/d; /ksu_sulog/d' kernel/feature/sucompat.c || true
-       
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
        sed -i 's/struct task_struct \*p = current;/struct task_struct __attribute__((unused)) \*p = current;/g' kernel/policy/app_profile.c || true
        sed -i 's/struct task_struct \*t;/struct task_struct __attribute__((unused)) \*t;/g' kernel/policy/app_profile.c || true
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
-       
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
        
        {
@@ -53,23 +50,18 @@ runs:
          echo "extern void susfs_set_current_proc_umounted(void);"
        } >> kernel/hook/setuid_hook.h
 
-       echo "🔗 建立绝对合法的 IOCTL 与 Reboot 通信旁路 (susfs_bypass.c)..."
+       echo "🔗 建立绝对合法的独立通信旁路 (susfs_bypass.c)..."
        sed -i '/susfs\.o/d' kernel/Kbuild || true
-       
        {
          echo "#include <linux/cred.h>"
          echo "#include <linux/susfs.h>"
          echo "#include \"uapi/supercall.h\""
-         
-         echo "// LTO Symbol Stubs for SukiSU"
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
          echo "int ksu_get_task_mark(int pid) { return 0; }"
          echo "void ksu_set_task_mark(int pid, int mark) {}"
          echo "void ksu_mark_all_process(int mark) {}"
          echo "void ksu_unmark_all_process(int mark) {}"
-
-         echo "// 真正的全量处理器 (拦截管理器或安装脚本的通信)"
          echo "int ksu_handle_susfs_ioctl(unsigned int cmd, void __user *arg) {"
          echo "    if (current_uid().val != 0) return -ENOTTY;"
          echo "    switch(cmd) {"
@@ -107,8 +99,6 @@ runs:
          echo "        default: return -ENOTTY;"
          echo "    }"
          echo "}"
-         
-         echo "// 兜底系统 Reboot 通信模式"
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {"
          echo "    if (magic1 != 0x7f45253c || magic2 != 0x53555346) return -EINVAL;"
          echo "    return ksu_handle_susfs_ioctl(cmd, *arg);"
@@ -136,40 +126,26 @@ runs:
       cd "$COMMON"
       cp "$SUSFS4KSU/kernel_patches/fs/"* ./fs/
       cp "$SUSFS4KSU/kernel_patches/include/linux/"* ./include/linux/
-
       echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
       echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
       echo "int ksu_execveat_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       echo "int ksu_input_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
       grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
-
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
-          
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
-
-      echo "🎯 执行三星 Knox 精准穿甲..."
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
-
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       if [ ${#patches[@]} -gt 0 ]; then
        cp "${patches[@]}" ./
        for p in *.patch; do patch -p1 < "$p" || true; done
       fi
-
-      echo "config KSU_SUSFS" >> fs/Kconfig
-      echo "    bool \"SUSFS Support\"" >> fs/Kconfig
-      echo "    default y" >> fs/Kconfig
-      for conf in KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT KSU_SUSFS_SUS_KSTAT KSU_SUSFS_SUS_OVERLAYFS KSU_SUSFS_TRY_UMOUNT KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_SU; do
-        echo "config $conf" >> fs/Kconfig
-        echo "    bool" >> fs/Kconfig
-        echo "    default y" >> fs/Kconfig
+      for conf in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT KSU_SUSFS_SUS_KSTAT KSU_SUSFS_SUS_OVERLAYFS KSU_SUSFS_TRY_UMOUNT KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_SU KSU_SUSFS_SUS_MAP; do
+        echo -e "config $conf\n    bool\n    default y" >> fs/Kconfig
       done
-          
       cd "$GITHUB_WORKSPACE"
       {
-        echo "# SUSFS 2.1.0 Configuration"
         echo "CONFIG_KSU_SUSFS=y"
         echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
         echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -184,4 +160,5 @@ runs:
         echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
         echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
         echo "CONFIG_KSU_SUSFS_SUS_SU=y"
+        echo "CONFIG_KSU_SUSFS_SUS_MAP=y"
       } >> "$GKI_DEFCONFIG"
