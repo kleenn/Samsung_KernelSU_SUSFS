@@ -8,20 +8,21 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (Orthogonal Bypass & Force Injection)
+   - name: Apply SUSFS to Manager (Final Orthogonal Bypass)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🔍 提取并重构物理文件..."
+       echo "🔍 提取 susfs.c/h ..."
        awk '/^diff --git a\/kernel\/susfs\.c/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.c
        awk '/^diff --git a\/kernel\/susfs\.h/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.h
        grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
        
-       echo "🚀 执行精准 Patch 过滤与应用..."
+       echo "🚀 剔除 supercall 冲突..."
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
+
        cp "$PATCH_FILE" .
        sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
        patch -p1 < 10_enable_susfs_for_ksu.patch || true
@@ -30,33 +31,26 @@ runs:
        cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch . || true
        rm -rf multi_manager.patch multi_sepolicy_fix.patch
        for p in *.patch; do patch -p1 < "$p" || true; done
-
-       echo "🔨 启动架构级语法强控修复..."
-       # 修复 init.c 头文件断链陷阱 (分离 sed 以确保跨平台及 YAML 兼容性绝对安全)
-       sed -i '/#include "feature\/adb_root.h"/a #include "hook\/setuid_hook.h"' kernel/core/init.c || true
-       sed -i '/#include "hook\/setuid_hook.h"/a #include "feature\/sucompat.h"' kernel/core/init.c || true
+       
+       echo "🔨 执行语法级强行修复..."
        sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
        sed -i '/#include <linux\/moduleparam.h>/a #include <linux\/susfs.h>' kernel/core/init.c || true
-       
-       # 日志流焦土策略
        sed -i '/write_sulog/d; /ksu_sulog/d' kernel/feature/sucompat.c || true
-       
-       # 变量引用与签名兼容
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
+       
+       # 【新增】：强制显式声明 ksu_late_loaded，闭合 dispatch.c 的变量引用断层
+       sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
+       
+       echo "#include <linux/cred.h>" >> kernel/hook/setuid_hook.h
+       echo "#include <linux/susfs.h>" >> kernel/hook/setuid_hook.h
+       echo "#include <linux/susfs_def.h>" >> kernel/hook/setuid_hook.h
+       echo "extern void susfs_run_sus_path_loop(void);" >> kernel/hook/setuid_hook.h
+       echo "extern void susfs_set_current_proc_umounted(void);" >> kernel/hook/setuid_hook.h
+       
        sed -i 's/struct task_struct \*p = current;/struct task_struct __attribute__((unused)) \*p = current;/g' kernel/policy/app_profile.c || true
        sed -i 's/struct task_struct \*t;/struct task_struct __attribute__((unused)) \*t;/g' kernel/policy/app_profile.c || true
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
-       
-       # 头文件外部引用闭环
-       {
-         echo "#include <linux/cred.h>"
-         echo "#include <linux/susfs.h>"
-         echo "#include <linux/susfs_def.h>"
-         echo "extern void susfs_run_sus_path_loop(void);"
-         echo "extern void susfs_set_current_proc_umounted(void);"
-       } >> kernel/hook/setuid_hook.h
 
-       echo "🔗 挂载 SUSFS 旁路通信总线..."
        echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {" >> kernel/susfs.c
        echo "    if (magic1 != 0x7f45253c) return -EINVAL;" >> kernel/susfs.c
        echo "    if (magic2 == 0x53555346 && current_uid().val == 0) {" >> kernel/susfs.c
