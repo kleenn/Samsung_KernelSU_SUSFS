@@ -173,7 +173,6 @@ jobs:
       - name: Inject Network & LZ4KD Optimizations
         run: |
           cd "$CONFIG"
-          
           git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
           KERNEL_SRC=""
           for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
@@ -182,14 +181,10 @@ jobs:
           [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
           cd "$KERNEL_SRC"
           
-          # 【物理修复】：压制 ZeroMount 补丁引入的未使用标签报错
           sed -i '1i #pragma GCC diagnostic ignored "-Wunused-label"' fs/readdir.c || true
-
-          # 【物理修复】：打破 ZeroMount 的头文件循环依赖
           awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
           awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
 
-          # 【物理修复】：建立拓扑结构
           mkdir -p lib/lz4k lib/lz4kd
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/lz4*.h include/linux/ || true
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/lz4k lib/
@@ -197,46 +192,42 @@ jobs:
           cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/*.c crypto/ || true
           
-          # 【物理修复】：解除三星 GKI 的私有注释
           sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
           sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
           
-          # 【挂载补丁】：应用 LZ4KD 补丁
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
           patch -p1 < lz4k_oplus.patch || true
           
-          # 【核心修复】：物理清理补丁污染，并强制链接
           sed -i '/lz4k_oplus/d' lib/Kconfig || true
           sed -i '/lz4k_oplus\//d' lib/Makefile || true
-          grep -q "lz4kd.o" crypto/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o" >> crypto/Makefile
-          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-\$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus.o" >> lib/Makefile
 
-          # 【关键修复】：在 ZRAM 算法数组的最前端强插，无视所有 IS_ENABLED 判定
+          # 【核弹级直编指令】：强制转换 ZRAM 为内建(vmlinux)驱动，无视 vendor 模块
+          sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/zram/Makefile
+          sed -i 's/obj-$(CONFIG_ZRAM)/obj-y/g' drivers/block/Makefile
+          
+          # 【强制链接】：硬编码编入压缩算法实体
+          grep -q "lz4kd.o" crypto/Makefile || echo "obj-y += lz4kd.o" >> crypto/Makefile
+          grep -q "lz4k.o" crypto/Makefile || echo "obj-y += lz4k.o" >> crypto/Makefile
+          grep -q "lz4k_oplus.o" lib/Makefile || echo "obj-y += lz4k_oplus.o" >> lib/Makefile
+          grep -q "lz4k\/" lib/Makefile || echo "obj-y += lz4k/" >> lib/Makefile
+          grep -q "lz4kd\/" lib/Makefile || echo "obj-y += lz4kd/" >> lib/Makefile
+          
+          echo "obj-y += lz4k_compress.o lz4k_decompress.o" > lib/lz4k/Makefile
+          echo "obj-y += lz4kd_compress.o lz4kd_decompress.o" > lib/lz4kd/Makefile
+
+          # 【强插 UI 选项】：强制 ZRAM 软件可见
           sed -i '/static const char \* const backends\[\] = {/a \	"lz4kd",\n\	"lz4k_oplus",\n\	"lz4k",' drivers/block/zram/zcomp.c || true
 
-          # 【SUSFS 绝对唤醒】：强制将 susfs 编入内核心脏
-          grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
-
-          # 【Defconfig 注入】
-          DEFCONFIG="arch/arm64/configs/gki_defconfig"
-          if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
-          
-          {
-            echo "CONFIG_LZ4K_COMPRESS=y"
-            echo "CONFIG_LZ4K_DECOMPRESS=y"
-            echo "CONFIG_LZ4KD_COMPRESS=y"
-            echo "CONFIG_LZ4KD_DECOMPRESS=y"
-            echo "CONFIG_CRYPTO_LZ4K=y"
-            echo "CONFIG_CRYPTO_LZ4KD=y"
-            echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-            echo "CONFIG_IP_SET=y"
-            echo "CONFIG_IP_SET_HASH_NET=y"
-            echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
-            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
-            echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
-          } >> "$DEFCONFIG"
+          # 【无死角网络配置】：给所有 defconfig 均注入网络规则，防篡改
+          find arch/arm64/configs -type f -name "*defconfig*" -exec sh -c '
+            echo "CONFIG_IP_SET=y" >> "$1"
+            echo "CONFIG_IP_SET_HASH_NET=y" >> "$1"
+            echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$1"
+            echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" >> "$1"
+            echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" >> "$1"
+          ' _ {} \;
 
       - name: Change Kernel Name and clean dirty
         uses: ./.github/actions/kernel-name
