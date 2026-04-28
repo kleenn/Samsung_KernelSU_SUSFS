@@ -8,17 +8,20 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Manager (C-Syntax Healing)
+   - name: Apply SUSFS to Manager (Orthogonal Bypass & Force Injection)
      shell: bash
      run: |
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       echo "🔍 从补丁包中提取 susfs.c 与 susfs.h..."
-       awk '/^diff --git a\/kernel\/susfs\.c/{flag=1; next} /^diff --git/{if(flag) flag=0} flag {if (/^\+/ && !/^\+\+\+/) print substr($0, 2)}' "$PATCH_FILE" > kernel/susfs.c
-       awk '/^diff --git a\/kernel\/susfs\.h/{flag=1; next} /^diff --git/{if(flag) flag=0} flag {if (/^\+/ && !/^\+\+\+/) print substr($0, 2)}' "$PATCH_FILE" > kernel/susfs.h
+       echo "🔍 提取并重构物理文件..."
+       awk '/^diff --git a\/kernel\/susfs\.c/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.c
+       awk '/^diff --git a\/kernel\/susfs\.h/{f=1;next}/^diff --git/{f=0}f{if(/^\+/&&!/^\+\+\+/)print substr($0,2)}' "$PATCH_FILE" > kernel/susfs.h
        grep -q "susfs.o" kernel/Kbuild || echo "obj-y += susfs.o" >> kernel/Kbuild
-
+       
+       echo "🚀 执行精准 Patch 过滤与应用..."
+       awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
+       mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
        sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
        patch -p1 < 10_enable_susfs_for_ksu.patch || true
@@ -27,35 +30,75 @@ runs:
        cp "$KERNEL_PATCHES/next/susfs_fix_patches/$SUSFS_VERSION/"*.patch . || true
        rm -rf multi_manager.patch multi_sepolicy_fix.patch
        for p in *.patch; do patch -p1 < "$p" || true; done
-       
-       echo "🔨 执行 C 源码语法级强行修复..."
-       
-       # 修复 1：注入 susfs.h 解决 current_uid 报错
+
+       echo "🔨 启动架构级语法强控修复..."
+       # 修复 init.c 头文件断链陷阱 (分离 sed 以确保跨平台及 YAML 兼容性绝对安全)
+       sed -i '/#include "feature\/adb_root.h"/a #include "hook\/setuid_hook.h"' kernel/core/init.c || true
+       sed -i '/#include "hook\/setuid_hook.h"/a #include "feature\/sucompat.h"' kernel/core/init.c || true
        sed -i '1{/^#include <linux\/susfs.h>/d}' kernel/core/init.c || true
        sed -i '/#include <linux\/moduleparam.h>/a #include <linux\/susfs.h>' kernel/core/init.c || true
-
-       # 修复 2：彻底物理删除无用的遗留日志调用
-       sed -i '/write_sulog/d' kernel/feature/sucompat.c || true
-       sed -i '/ksu_sulog/d' kernel/feature/sucompat.c || true
        
-       # 修复 3：替换过期函数名
+       # 日志流焦土策略
+       sed -i '/write_sulog/d; /ksu_sulog/d' kernel/feature/sucompat.c || true
+       
+       # 变量引用与签名兼容
        sed -i 's/is_zygote_normal_app_uid/is_appuid/g' kernel/hook/setuid_hook.c || true
-       
-       # 修复 4：补全 setuid_hook.h 的依赖与显式声明
-       echo "#include <linux/cred.h>" >> kernel/hook/setuid_hook.h
-       echo "#include <linux/susfs.h>" >> kernel/hook/setuid_hook.h
-       echo "#include <linux/susfs_def.h>" >> kernel/hook/setuid_hook.h
-       echo "extern void susfs_run_sus_path_loop(void);" >> kernel/hook/setuid_hook.h
-       echo "extern void susfs_set_current_proc_umounted(void);" >> kernel/hook/setuid_hook.h
-       
-       # 【终极修复 5】：优雅压制 app_profile.c 的报错，绝不误删物理作用域
-       # 将变量标记为可能未使用，绕过 -Werror
        sed -i 's/struct task_struct \*p = current;/struct task_struct __attribute__((unused)) \*p = current;/g' kernel/policy/app_profile.c || true
        sed -i 's/struct task_struct \*t;/struct task_struct __attribute__((unused)) \*t;/g' kernel/policy/app_profile.c || true
-       # 给失效的挂载钩子创建一个空宏，让底层调用自然通过
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
+       
+       # 头文件外部引用闭环
+       {
+         echo "#include <linux/cred.h>"
+         echo "#include <linux/susfs.h>"
+         echo "#include <linux/susfs_def.h>"
+         echo "extern void susfs_run_sus_path_loop(void);"
+         echo "extern void susfs_set_current_proc_umounted(void);"
+       } >> kernel/hook/setuid_hook.h
 
-   - name: Apply SUSFS to Kernel
+       echo "🔗 挂载 SUSFS 旁路通信总线..."
+       echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {" >> kernel/susfs.c
+       echo "    if (magic1 != 0x7f45253c) return -EINVAL;" >> kernel/susfs.c
+       echo "    if (magic2 == 0x53555346 && current_uid().val == 0) {" >> kernel/susfs.c
+       echo "        switch(cmd) {" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SUS_PATH" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: susfs_add_sus_kstat(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "#ifdef CONFIG_KSU_SUSFS_SUS_MAP" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(arg); return 0;" >> kernel/susfs.c
+       echo "#endif" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_SHOW_ENABLED_FEATURES: susfs_get_enabled_features(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(arg); return 0;" >> kernel/susfs.c
+       echo "            case CMD_SUSFS_SHOW_VERSION: susfs_show_version(arg); return 0;" >> kernel/susfs.c
+       echo "            default: return -EINVAL;" >> kernel/susfs.c
+       echo "        }" >> kernel/susfs.c
+       echo "    }" >> kernel/susfs.c
+       echo "    return -EINVAL;" >> kernel/susfs.c
+       echo "}" >> kernel/susfs.c
+
+   - name: Apply SUSFS to Kernel (Knox Armor-Piercing)
      shell: bash
      run: |
       cd "$COMMON"
@@ -78,6 +121,9 @@ runs:
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c
           
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
+
+      echo "🎯 执行三星 Knox 精准穿甲..."
+      awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
 
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
