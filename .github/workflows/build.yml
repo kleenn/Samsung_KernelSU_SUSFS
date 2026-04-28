@@ -198,18 +198,45 @@ jobs:
           patch -p1 -F 3 < lz4k_oplus.patch || true
 
           # 【核弹级强插 UI】：使用 awk 绝对突破法，寻找数组起点直接暴力换行注入
+      # ================== 核心功能注入区 ==================
+      - name: Inject Network & LZ4KD Optimizations
+        run: |
+          cd "$CONFIG"
+          git clone https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
+          KERNEL_SRC=""
+          for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
+            if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
+          done
+          [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+          cd "$KERNEL_SRC"
+          
+          awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' include/linux/key.h > temp_key.h && mv temp_key.h include/linux/key.h
+          awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' include/linux/cred.h > temp_cred.h && mv temp_cred.h include/linux/cred.h
+
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* include/linux/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* lib/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* crypto/
+          cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus lib/
+          
+          sed -i 's/#\s*depends on BLOCK/depends on BLOCK/' drivers/block/zram/Kconfig || true
+          sed -i 's/#\s*select CRYPTO_LZO/select CRYPTO_LZO/' drivers/block/zram/Kconfig || true
+          
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
+          patch -p1 -F 3 < lz4kd.patch || true
+          cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
+          patch -p1 -F 3 < lz4k_oplus.patch || true
+
+          # 【核弹级强插 UI】：无视所有宏限制，直接用 awk 在数组最前端硬插！
           awk '/static const char \* const backends\[\] = \{/{print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"lz4k\","; next}1' drivers/block/zram/zcomp.c > temp_zcomp.c && mv temp_zcomp.c drivers/block/zram/zcomp.c
 
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           if [ ! -f "$DEFCONFIG" ]; then DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | grep -i "gki" | head -n 1); fi
           
           {
-            # ===== ZRAM & LZ4KD 高阶参数 =====
             echo "CONFIG_CRYPTO_LZ4KD=y"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y"
             echo "CONFIG_ZRAM_WRITEBACK=y"
             
-            # ===== 核心网络优化 (BBR + Westwood) =====
             echo "CONFIG_TCP_CONG_ADVANCED=y"
             echo "CONFIG_TCP_CONG_BBR=y"
             echo "CONFIG_NET_SCH_FQ=y"
@@ -217,7 +244,6 @@ jobs:
             echo "CONFIG_TCP_CONG_WESTWOOD=y"
             echo "CONFIG_TCP_CONG_HTCP=n"
 
-            # ===== 代理与路由分流 (Full IP_SET & TPROXY) =====
             echo "CONFIG_BPF_STREAM_PARSER=y"
             echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y"
             echo "CONFIG_NETFILTER_XT_SET=y"
@@ -297,7 +323,20 @@ jobs:
           path: |
             ./AnyKernel3/**
           compression-level: 9
-      
+
+      - name: "📝 Extract Compiled Modules | 提取 zram 等动态内核模块"
+        run: |
+          echo "🌐 正在提取独立驱动模块..."
+          mkdir -p ./Extract-Modules
+          find ./kernel_workspace/kernel_platform/ -name "zram.ko" -exec cp {} ./Extract-Modules/ \; || echo "No zram.ko"
+          find ./kernel_workspace/kernel_platform/ -name "lz4*.ko" -exec cp {} ./Extract-Modules/ \; || echo "No lz4.ko"
+
+      - name: "📤 Upload Modules | 上传模块产物"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.FEIL }}_Modules
+          path: ./Extract-Modules/*
+
       - name: Scan and collect patch rejects
         if: ${{ always() }}
         run: |
