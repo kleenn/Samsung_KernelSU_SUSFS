@@ -46,7 +46,7 @@ runs:
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
 
-       # 【神级 stubs】：直接将缺失符号注入 init.c，解决 ld.lld 链接熔断
+       # 【物理类型对齐】：修正函数签名，匹配 void 返回值和双指针参数
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -56,11 +56,11 @@ runs:
          echo "void ksu_unmark_all_process(int mark) {}"
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) {"
          echo "    if (magic1 != 0x7f45253c || magic2 != 0x53555346) return -EINVAL;"
-         echo "    extern int susfs_add_sus_path(void __user *arg);"
-         echo "    extern int susfs_add_sus_kstat(void __user *arg);"
+         echo "    extern void susfs_add_sus_path(void __user **user_info);"
+         echo "    extern void susfs_add_sus_kstat(void __user **user_info);"
          echo "    switch(cmd) {"
-         echo "        case 0x55570: susfs_add_sus_path(*arg); return 0;"
-         echo "        case 0x55572: susfs_add_sus_kstat(*arg); return 0;"
+         echo "        case 0x55570: susfs_add_sus_path(arg); return 0;"
+         echo "        case 0x55572: susfs_add_sus_kstat(arg); return 0;"
          echo "        default: return -ENOTTY;"
          echo "    }"
          echo "}"
@@ -85,7 +85,7 @@ runs:
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
 
-      # 【物理对齐修复】：利用你提供的源码，精准定位在 init_mount_tree 之后点火
+      # 【物理对齐修复】：定位在 init_mount_tree 之后点火
       echo "🚀 物理对齐 mnt_init，强制唤醒 SUSFS..."
       awk '/init_mount_tree\(\);/{print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' fs/namespace.c > temp_ns_init.c && mv temp_ns_init.c fs/namespace.c
 
