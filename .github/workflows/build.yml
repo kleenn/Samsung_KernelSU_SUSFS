@@ -300,7 +300,7 @@ jobs:
           cd $GITHUB_WORKSPACE
           
           echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
-          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1)
+          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1) || true
           if [ -f "$CONFIG_FILE" ]; then
             echo "✅ 截获文件: $CONFIG_FILE"
             grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
@@ -309,30 +309,31 @@ jobs:
           fi
           
           echo -e "\n[2] 查验 zcomp.c (神级算法是否注入 UI 阵列):"
-          ZCOMP_FILE=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1)
+          ZCOMP_FILE=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1) || true
           if [ -f "$ZCOMP_FILE" ]; then
-            grep -A 8 "static const char \* const backends" "$ZCOMP_FILE"
+            grep -A 8 "static const char \* const backends" "$ZCOMP_FILE" || true
           else
             echo "❌ 未发现 zcomp.c"
           fi
           
           echo -e "\n[3] 查验 init.c (SUSFS 符号与挂载点火):"
-          INIT_FILE=$(find . -name "init.c" -type f | grep "core" | head -n 1)
+          # 放宽搜索条件，精准抓取 SukiSU 的 init.c
+          INIT_FILE=$(find . -name "init.c" -type f | grep "KernelSU" | head -n 1) || true
           if [ -f "$INIT_FILE" ]; then
             echo "--- extern 声明区 ---"
             head -n 20 "$INIT_FILE" | grep "susfs_init" || echo "未找到 extern 声明"
             echo "--- 点火区 ---"
-            grep -A 3 "ksu_supercalls_init" "$INIT_FILE"
+            grep -A 3 "ksu_supercalls_init" "$INIT_FILE" || true
             echo "--- 缺失符号填充区 ---"
-            tail -n 15 "$INIT_FILE"
+            tail -n 15 "$INIT_FILE" || true
           else
-            echo "❌ 未发现 init.c"
+            echo "❌ 未发现 KSU init.c"
           fi
           
           echo -e "\n[4] 查验 dispatch.c (IOCTL 强行旁路):"
-          DISPATCH_FILE=$(find . -name "dispatch.c" -type f | grep "supercall" | head -n 1)
+          DISPATCH_FILE=$(find . -name "dispatch.c" -type f | grep "supercall" | head -n 1) || true
           if [ -f "$DISPATCH_FILE" ]; then
-            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 25
+            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 25 || true
           else
             echo "❌ 未发现 dispatch.c"
           fi
