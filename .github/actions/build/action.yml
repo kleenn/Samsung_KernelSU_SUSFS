@@ -59,7 +59,7 @@ runs:
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
 
-     # 【经验大成 4：原生 Defconfig 模板静态注入 (彻底废弃危险的 Make 劫持，根除并发冲突)】
+     # 【经验大成 4：原生 Defconfig 模板静态注入 (全面肃清 *defconfig 和 *.config 碎片)】
      echo "🚀 部署原生 Defconfig 模板静态注入..."
      
      FLAGS=(
@@ -79,7 +79,8 @@ runs:
          "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y"
      )
      
-     for defconfig in $(find . -name "*defconfig"); do
+     # 扩大搜索范围：将 *.config 一并纳入扫荡范围，彻底杜绝 merge_config.sh 报冲突异常
+     for defconfig in $(find . -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
          for flag in "${FLAGS[@]}"; do
              key=$(echo "$flag" | cut -d'=' -f1)
              sed -i "/^$key=/d" "$defconfig"
