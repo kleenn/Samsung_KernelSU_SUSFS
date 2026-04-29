@@ -15,19 +15,61 @@ runs:
      set -x
      cd "$CONFIG"
      
-     # 【核弹级劫持】：伪造系统的 make 指令，在底层配置文件落盘的千分之一秒内强行篡改！
+     # 【Kconfig 护盾修补】：为 LZ4KD 提供合法身份声明，防止 make 启动时将其当做黑户洗掉！
+     KERNEL_SRC=""
+     for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
+       if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
+     done
+     [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+     
+     if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
+       echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "config CRYPTO_LZ4K_OPLUS" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "config CRYPTO_LZ4K" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+     fi
+
+     # 【核弹级劫持】：部署 Kconfig 幽灵劫持器
      echo "🚀 部署 Kconfig 幽灵劫持器..."
      cat << 'EOF' > make_hook.sh
      #!/bin/bash
      
-     # 拦截并修改所有生成的 .config，让三星的重置操作彻底失效！
+     # 拦截并修改所有生成的 .config
      for cfg in $(find . -name ".config" -type f); do
          # 强制内建 ZRAM 及其内存分配器
          sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$cfg"
          sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$cfg"
          
-         # 全量写入绝密算法库与网络优化矩阵 (匹配即改为y，没有即追加)
-         for flag in CONFIG_CRYPTO_842 CONFIG_842_COMPRESS CONFIG_842_DECOMPRESS CONFIG_CRYPTO_LZ4HC CONFIG_LZ4HC_COMPRESS CONFIG_LZ4HC_DECOMPRESS CONFIG_LZ4K_COMPRESS CONFIG_LZ4K_DECOMPRESS CONFIG_LZ4KD_COMPRESS CONFIG_LZ4KD_DECOMPRESS CONFIG_CRYPTO_LZ4K CONFIG_CRYPTO_LZ4KD CONFIG_CRYPTO_LZ4K_OPLUS CONFIG_ZRAM_WRITEBACK CONFIG_TCP_CONG_ADVANCED CONFIG_TCP_CONG_BBR CONFIG_NET_SCH_FQ CONFIG_TCP_CONG_WESTWOOD CONFIG_BPF_STREAM_PARSER CONFIG_NETFILTER_XT_MATCH_ADDRTYPE CONFIG_NETFILTER_XT_SET CONFIG_IP_SET CONFIG_IP_SET_BITMAP_IP CONFIG_IP_SET_BITMAP_IPMAC CONFIG_IP_SET_BITMAP_PORT CONFIG_IP_SET_HASH_IP CONFIG_IP_SET_HASH_IPMARK CONFIG_IP_SET_HASH_IPPORT CONFIG_IP_SET_HASH_IPPORTIP CONFIG_IP_SET_HASH_IPPORTNET CONFIG_IP_SET_HASH_IPMAC CONFIG_IP_SET_HASH_MAC CONFIG_IP_SET_HASH_NETPORTNET CONFIG_IP_SET_HASH_NET CONFIG_IP_SET_HASH_NETNET CONFIG_IP_SET_HASH_NETPORT CONFIG_IP_SET_HASH_NETIFACE CONFIG_IP_SET_LIST_SET CONFIG_IP6_NF_NAT CONFIG_IP6_NF_TARGET_MASQUERADE CONFIG_NETFILTER CONFIG_NETFILTER_ADVANCED CONFIG_NETFILTER_XTABLES CONFIG_NETFILTER_XT_TARGET_TPROXY CONFIG_NETFILTER_XT_MATCH_SOCKET CONFIG_NETFILTER_XT_MATCH_MARK CONFIG_NETFILTER_XT_TARGET_MARK CONFIG_NETFILTER_XT_TARGET_REDIRECT; do
+         # 【终极满血矩阵】：全量包裹 SUSFS、ZRAM 家族与网络优化，一个都不能少！
+         FLAGS=(
+             "CONFIG_KSU_SUSFS" "CONFIG_KSU_SUSFS_SUS_PATH" "CONFIG_KSU_SUSFS_SUS_MOUNT"
+             "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT"
+             "CONFIG_KSU_SUSFS_SUS_KSTAT" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS" "CONFIG_KSU_SUSFS_TRY_UMOUNT"
+             "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT" "CONFIG_KSU_SUSFS_SPOOF_UNAME"
+             "CONFIG_KSU_SUSFS_ENABLE_LOG" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS"
+             "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG" "CONFIG_KSU_SUSFS_OPEN_REDIRECT"
+             "CONFIG_KSU_SUSFS_SUS_SU" "CONFIG_KSU_SUSFS_SUS_MAP"
+             "CONFIG_CRYPTO_842" "CONFIG_842_COMPRESS" "CONFIG_842_DECOMPRESS"
+             "CONFIG_CRYPTO_LZ4HC" "CONFIG_LZ4HC_COMPRESS" "CONFIG_LZ4HC_DECOMPRESS"
+             "CONFIG_LZ4K_COMPRESS" "CONFIG_LZ4K_DECOMPRESS" "CONFIG_LZ4KD_COMPRESS" "CONFIG_LZ4KD_DECOMPRESS"
+             "CONFIG_CRYPTO_LZ4K" "CONFIG_CRYPTO_LZ4KD" "CONFIG_CRYPTO_LZ4K_OPLUS" "CONFIG_ZRAM_WRITEBACK"
+             "CONFIG_TCP_CONG_ADVANCED" "CONFIG_TCP_CONG_BBR" "CONFIG_NET_SCH_FQ" "CONFIG_TCP_CONG_WESTWOOD"
+             "CONFIG_BPF_STREAM_PARSER" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "CONFIG_NETFILTER_XT_SET"
+             "CONFIG_IP_SET" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP" "CONFIG_IP_SET_BITMAP_IPMAC" 
+             "CONFIG_IP_SET_BITMAP_PORT" "CONFIG_IP_SET_HASH_IP" "CONFIG_IP_SET_HASH_IPMARK" "CONFIG_IP_SET_HASH_IPPORT"
+             "CONFIG_IP_SET_HASH_IPPORTIP" "CONFIG_IP_SET_HASH_IPPORTNET" "CONFIG_IP_SET_HASH_IPMAC"
+             "CONFIG_IP_SET_HASH_MAC" "CONFIG_IP_SET_HASH_NETPORTNET" "CONFIG_IP_SET_HASH_NET"
+             "CONFIG_IP_SET_HASH_NETNET" "CONFIG_IP_SET_HASH_NETPORT" "CONFIG_IP_SET_HASH_NETIFACE"
+             "CONFIG_IP_SET_LIST_SET" "CONFIG_IP6_NF_NAT" "CONFIG_IP6_NF_TARGET_MASQUERADE"
+             "CONFIG_NETFILTER" "CONFIG_NETFILTER_ADVANCED" "CONFIG_NETFILTER_XTABLES"
+             "CONFIG_NETFILTER_XT_TARGET_TPROXY" "CONFIG_NETFILTER_XT_MATCH_SOCKET"
+             "CONFIG_NETFILTER_XT_MATCH_MARK" "CONFIG_NETFILTER_XT_TARGET_MARK"
+             "CONFIG_NETFILTER_XT_TARGET_REDIRECT"
+         )
+         
+         for flag in "${FLAGS[@]}"; do
              if grep -q "^# $flag is not set" "$cfg"; then
                  sed -i "s/^# $flag is not set/$flag=y/g" "$cfg"
              elif ! grep -q "^$flag=y" "$cfg"; then
@@ -35,31 +77,30 @@ runs:
              fi
          done
          
-         # 显式关闭落后网络算法
+         # 清除冲突算法
          sed -i "s/^CONFIG_TCP_CONG_BIC=y/# CONFIG_TCP_CONG_BIC is not set/g" "$cfg" || true
          sed -i "s/^CONFIG_TCP_CONG_HTCP=y/# CONFIG_TCP_CONG_HTCP is not set/g" "$cfg" || true
      done
      
-     # 放行真实的 make，它此时拿到的 .config 已经是满血版
      exec /usr/bin/make "$@"
      EOF
      chmod +x make_hook.sh
      
-     # 劫持环境变量
+     # 【全局接管】：将 make 指令替换为我们的劫持马甲
      export PATH="$(pwd):$PATH"
      export MAKE="make_hook.sh"
+     if [ -d "kernel_platform/build" ]; then
+         find kernel_platform/build -name "*.sh" -type f -exec sed -i 's/\bmake \b/make_hook.sh /g' {} + || true
+     fi
      
      echo "Building the kernel..."
      if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" || "${{ inputs.branch }}" == "SM-X710-Oneui6.1.1" ]]; then
        chmod +x build_kernel_GKI.sh
-       # 在执行脚本前，把脚本内部的原始 make 命令替换为我们的马甲
        sed -i 's/\bmake \b/make_hook.sh /g' build_kernel_GKI.sh || true
-       sed -i 's/\bmake \b/make_hook.sh /g' kernel_platform/build/android/prepare_vendor.sh || true
        ./build_kernel_GKI.sh
      elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || ${{ inputs.branch }} == SM-S911B* || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
        chmod +x build_kernel_GKI.sh
        sed -i 's/\bmake \b/make_hook.sh /g' build_kernel_GKI.sh || true
-       sed -i 's/\bmake \b/make_hook.sh /g' kernel_platform/build/android/prepare_vendor.sh || true
        ./build_kernel_GKI.sh
      elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" || ${{ inputs.branch }} == SM-A055* || "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" || "${{ inputs.branch }}" == "SM-A166B-Oneui7" ]]; then
        chmod +x build_kernel.sh
