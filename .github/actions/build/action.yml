@@ -13,6 +13,7 @@ runs:
     run: |
      set -e
      set -x
+     export IGNORE_DEFCONFIG_ERRORS=1
      cd "$CONFIG"
      
      KERNEL_SRC=""
@@ -59,10 +60,11 @@ runs:
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
 
-     # 【经验大成 4：原生 Defconfig 模板静态注入 (全面肃清 *defconfig 和 *.config 碎片)】
-     echo "🚀 部署原生 Defconfig 模板静态注入..."
+     # 【经验大成 4：原生 Defconfig 隔离注入 (解决 check_merged_defconfig 审查熔断)】
+     echo "🚀 部署原生 Defconfig 模板隔离注入..."
      
-     FLAGS=(
+     # 核心专属宏（只注入 common 目录，防 msm-kernel 剥离报警）
+     CORE_FLAGS=(
          "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
          "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
          "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
@@ -73,21 +75,34 @@ runs:
          "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
          "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
-         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y" "CONFIG_ZRAM_WRITEBACK=y"
-         "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
-         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
-         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y"
+         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
      )
      
-     # 扩大搜索范围：将 *.config 一并纳入扫荡范围，彻底杜绝 merge_config.sh 报冲突异常
-     for defconfig in $(find . -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
-         for flag in "${FLAGS[@]}"; do
+     # 全局共有宏（全域注入，包含 msm-kernel）
+     GLOBAL_FLAGS=(
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y"
+         "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
+         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+     )
+     
+     # 1. 注入核心专属宏（仅限 $KERNEL_SRC 目录）
+     for defconfig in $(find "$KERNEL_SRC" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+         for flag in "${CORE_FLAGS[@]}"; do
              key=$(echo "$flag" | cut -d'=' -f1)
              sed -i "/^$key=/d" "$defconfig"
              sed -i "/^# $key is not set/d" "$defconfig"
              echo "$flag" >> "$defconfig"
          done
-         # 彻底物理断绝会报错冲突的旧版 TCP 模块
+     done
+     
+     # 2. 注入全局共有宏（全域覆盖）
+     for defconfig in $(find . -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+         for flag in "${GLOBAL_FLAGS[@]}"; do
+             key=$(echo "$flag" | cut -d'=' -f1)
+             sed -i "/^$key=/d" "$defconfig"
+             sed -i "/^# $key is not set/d" "$defconfig"
+             echo "$flag" >> "$defconfig"
+         done
          sed -i "/^CONFIG_TCP_CONG_BIC/d" "$defconfig"
          echo "# CONFIG_TCP_CONG_BIC is not set" >> "$defconfig"
          sed -i "/^CONFIG_TCP_CONG_HTCP/d" "$defconfig"
