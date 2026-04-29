@@ -30,21 +30,15 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
      
-     # 【终极降维打击：现场捏造无敌 Makefile，解决 undefined symbol】
-     for dir in lz4k lz4k_oplus; do
-         if [ -d "$KERNEL_SRC/lib/$dir" ]; then
-             rm -f "$KERNEL_SRC/lib/$dir/Makefile"
-             touch "$KERNEL_SRC/lib/$dir/Makefile"
-             for c in $(find "$KERNEL_SRC/lib/$dir" -maxdepth 1 -name "*.c"); do
-                 base=$(basename "$c" .c)
-                 echo "obj-y += $base.o" >> "$KERNEL_SRC/lib/$dir/Makefile"
-             done
-             grep -q "$dir/" "$KERNEL_SRC/lib/Makefile" || echo "obj-y += $dir/" >> "$KERNEL_SRC/lib/Makefile"
-         fi
+     # 【终极降维打击：物理摊平！把 lib 库里的算法实现全量复制到 crypto，防静态库剥离！】
+     find $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/ -type f \( -name "*.c" -o -name "*.S" \) -exec cp {} "$KERNEL_SRC/crypto/" \; || true
+     find $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/ -type f \( -name "*.c" -o -name "*.S" \) -exec cp {} "$KERNEL_SRC/crypto/" \; || true
+     
+     # 强制在 crypto/Makefile 里将摊平的文件全量写入 obj-y！
+     for cfile in $(ls "$KERNEL_SRC/crypto/"lz4k*.c "$KERNEL_SRC/crypto/"lz4k*.S 2>/dev/null); do
+         objname="$(basename "$cfile" | sed 's/\.[cS]$/.o/')"
+         grep -q "^obj-y += $objname" "$KERNEL_SRC/crypto/Makefile" || echo "obj-y += $objname" >> "$KERNEL_SRC/crypto/Makefile"
      done
-
-     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
-     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
 
      # 【Kconfig 护盾修补与补丁应用】
      cp "$KERNEL_SRC/drivers/block/zram/Kconfig" "$KERNEL_SRC/drivers/block/zram/Kconfig.bak"
@@ -59,8 +53,8 @@ runs:
      mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
      mv "$KERNEL_SRC/crypto/Kconfig.bak" "$KERNEL_SRC/crypto/Kconfig"
 
-     # 【ZRAM UI 强插：严格回滚到 A 181 经验证 100% 成功的 sed 版本！】
-     for zc in $(find "$KERNEL_SRC" -name zcomp.c); do
+     # 【ZRAM UI 强插：一字不差地回滚到 A 181 经验证 100% 成功的版本！】
+     for zc in $(find . -name zcomp.c); do
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
      
