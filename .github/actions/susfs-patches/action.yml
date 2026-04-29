@@ -49,7 +49,7 @@ runs:
        sed -i '1i extern void susfs_init(void);' kernel/core/init.c
        awk '/ksu_supercalls_init\(\);/{print; print "    susfs_init(); // SUSFS IGNITION"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
 
-       # 【Stubs 补全】：修正致死签名，将 **arg 严格降级为 *arg，完美对齐 reboot.c！
+       # 【Stubs 补全】
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -63,26 +63,31 @@ runs:
        # 【绝对真理 2 修正】：保持 extern void 签名
        sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
        
-       # 【柔性容错旁路】：打通 IOCTL 隧道
+       # 【IOCTL 真理降临】：强行把官方命令字宏提取并塞入 dispatch.c 头部，彻底粉碎 0x55570 玄学猜想！
+       grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' > temp_macros.h
+       cat temp_macros.h kernel/supercall/dispatch.c > temp_dispatch_macros.c && mv temp_dispatch_macros.c kernel/supercall/dispatch.c
+       rm temp_macros.h
+
+       # 【官方宏柔性旁路】：使用 CMD_SUSFS_* 让 C 编译器自己算结构体偏移量！
        awk '
        /long ksu_supercall_handle_ioctl/ { in_func=1; print $0; next }
        in_func && /for *\(i = 0;/ {
            print "    if (current_uid().val == 0) {"
            print "        switch(cmd) {"
-           print "            case 0x55570: susfs_add_sus_path(&argp); return 0;"
-           print "            case 0x55571: susfs_add_sus_path_loop(&argp); return 0;"
-           print "            case 0x55572: susfs_add_sus_kstat(&argp); return 0;"
-           print "            case 0x55573: susfs_update_sus_kstat(&argp); return 0;"
-           print "            case 0x55574: susfs_set_uname(&argp); return 0;"
-           print "            case 0x55575: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
-           print "            case 0x55576: susfs_add_sus_map(&argp); return 0;"
-           print "            case 0x55577: susfs_add_open_redirect(&argp); return 0;"
-           print "            case 0x55578: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
-           print "            case 0x55579: susfs_enable_log(&argp); return 0;"
-           print "            case 0x5557A: susfs_set_avc_log_spoofing(&argp); return 0;"
-           print "            case 0x5557B: susfs_show_variant(&argp); return 0;"
-           print "            case 0x5557C: susfs_show_version(&argp); return 0;"
-           print "            case 0x5557D: susfs_get_enabled_features(&argp); return 0;"
+           print "            case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(&argp); return 0;"
+           print "            case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(&argp); return 0;"
+           print "            case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(&argp); return 0;"
+           print "            case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(&argp); return 0;"
+           print "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(&argp); return 0;"
+           print "            case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
+           print "            case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(&argp); return 0;"
+           print "            case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(&argp); return 0;"
+           print "            case CMD_SUSFS_SET_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
+           print "            case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(&argp); return 0;"
+           print "            case CMD_SUSFS_SET_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(&argp); return 0;"
+           print "            case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(&argp); return 0;"
+           print "            case CMD_SUSFS_SHOW_VERSION: susfs_show_version(&argp); return 0;"
+           print "            case CMD_SUSFS_GET_ENABLED_FEATURES: susfs_get_enabled_features(&argp); return 0;"
            print "        }"
            print "    }"
            in_func=0
@@ -111,7 +116,7 @@ runs:
 
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
-      if [ ${#patches[@]} -gt 0 ]; then
+      if [ [ ${#patches[@]} -gt 0 ] ]; then
        cp "${patches[@]}" ./
        for p in *.patch; do patch -p1 < "$p" || true; done
       fi
