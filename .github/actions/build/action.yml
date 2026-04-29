@@ -31,15 +31,11 @@ runs:
        echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
      fi
 
-     # 【核弹级无痕劫持】：部署 Kconfig 幽灵劫持器
-     echo "🚀 部署 Kconfig 幽灵劫持器..."
-     mkdir -p .hook_bin
-     cat << 'EOF' > .hook_bin/make
+     # 【核弹级无痕劫持升级版】：双层物理+环境变量劫持，彻底封死三星的逃逸路线！
+     echo "🚀 部署 Kconfig 幽灵劫持器 (Dual-Layer)..."
+     
+     cat << 'EOF' > make_hook_core.sh
      #!/bin/bash
-     
-     # 动态寻找原版 Android GKI make（跳过我们自己的这个 hook 脚本）
-     ORIG_MAKE=$(which -a make | grep -v "\.hook_bin/make" | head -n 1)
-     
      # 拦截并修改所有生成的 .config
      for cfg in $(find . -name ".config" -type f 2>/dev/null); do
          sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$cfg"
@@ -81,12 +77,33 @@ runs:
          sed -i "s/^CONFIG_TCP_CONG_HTCP=y/# CONFIG_TCP_CONG_HTCP is not set/g" "$cfg" || true
      done
      
-     # 执行原版 make，不破坏任何工具链
-     exec "$ORIG_MAKE" "$@"
+     if [ -n "$ORIG_MAKE_BIN" ]; then
+         exec "$ORIG_MAKE_BIN" "$@"
+     else
+         ORIG=$(which -a make | grep -v "\.hook_bin/make" | head -n 1)
+         exec "$ORIG" "$@"
+     fi
      EOF
-     chmod +x .hook_bin/make
-     
-     # 全局接管 PATH 环境变量
+     chmod +x make_hook_core.sh
+
+     # 第一层劫持：物理替换预编译 make（最高优先级防御）
+     PREBUILT_MAKE=$(find . -path "*/prebuilts/build-tools/*/bin/make" -type f | head -n 1)
+     if [ -n "$PREBUILT_MAKE" ]; then
+         echo "✅ 截获底层构建私有预编译 make: $PREBUILT_MAKE"
+         mv "$PREBUILT_MAKE" "${PREBUILT_MAKE}.orig"
+         cat << EOF_WRAPPER > "$PREBUILT_MAKE"
+#!/bin/bash
+export ORIG_MAKE_BIN="$(pwd)/${PREBUILT_MAKE}.orig"
+"$(pwd)/make_hook_core.sh" "\$@"
+EOF_WRAPPER
+         chmod +x "$PREBUILT_MAKE"
+     else
+         echo "⚠️ 未发现 prebuilts make，依赖环境变量劫持..."
+     fi
+
+     # 第二层劫持：环境变量兜底
+     mkdir -p .hook_bin
+     cp make_hook_core.sh .hook_bin/make
      export PATH="$(pwd)/.hook_bin:$PATH"
      
      echo "Building the kernel..."
