@@ -300,12 +300,12 @@ jobs:
           cd $GITHUB_WORKSPACE
           
           echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
-          CONFIG_FILE=$(find . -name ".config" -type f | head -n 1) || true
+          CONFIG_FILE=$(find . -name ".config" -type f | grep "common" | head -n 1) || true
           if [ -f "$CONFIG_FILE" ]; then
             echo "✅ 截获文件: $CONFIG_FILE"
             grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
           else
-            echo "❌ 未发现 .config"
+            echo "❌ 未发现 common/.config"
           fi
           
           echo -e "\n[2] 查验 zcomp.c (神级算法是否注入 UI 阵列):"
@@ -317,7 +317,6 @@ jobs:
           fi
           
           echo -e "\n[3] 查验 init.c (SUSFS 符号与挂载点火):"
-          # 放宽搜索条件，精准抓取 SukiSU 的 init.c
           INIT_FILE=$(find . -name "init.c" -type f | grep "KernelSU" | head -n 1) || true
           if [ -f "$INIT_FILE" ]; then
             echo "--- extern 声明区 ---"
