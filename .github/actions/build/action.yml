@@ -22,46 +22,27 @@ runs:
      done
      [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
-     # 【欺骗安检员：防止模块白名单熔断】
+     # 废除 GKI 符号裁剪，骗过安检
      find . -name "build.config*" -type f -exec sed -i 's/TRIM_NONLISTED_KMI=1/TRIM_NONLISTED_KMI=0/g' {} + || true
      find . -name "build.config*" -type f -exec sed -i 's/KMI_SYMBOL_LIST_STRICT_MODE=1/KMI_SYMBOL_LIST_STRICT_MODE=0/g' {} + || true
 
      awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/key.h" > temp_key.h && mv temp_key.h "$KERNEL_SRC/include/linux/key.h" || true
      awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/cred.h" > temp_cred.h && mv temp_cred.h "$KERNEL_SRC/include/linux/cred.h" || true
 
+     # 拷贝算法源码
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* "$KERNEL_SRC/include/linux/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* "$KERNEL_SRC/lib/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
-     grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
-     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
-     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
-
+     # 【信任补丁】：只打补丁！废除所有手动 echo Kconfig 和 Makefile，废除手动 sed zcomp.c！
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     # 【降维打击 1：篡改 Kconfig，彻底剥夺三星将 ZRAM 编译为外部模块的能力！】
+     # 降维打击：从源码层面剥夺 ZRAM 和 ZSMALLOC 的外部模块化能力，强制变 bool (仅内置)
      sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
      sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
-
-     if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
-       echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "config CRYPTO_LZ4K_OPLUS" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4K OPLUS Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "config CRYPTO_LZ4K" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4K Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-     fi
-
-     for zc in $(find . -name zcomp.c); do
-         sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
-     done
 
      echo "🚀 部署原生 Defconfig 模板隔离注入..."
      
@@ -79,9 +60,10 @@ runs:
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
      )
      
-     # 配合内置化的 ZRAM=y 和 WRITEBACK
+     # 【终极修复】：完全利用补丁生成的 ZRAM_DEF_COMP_LZ4KD 机制指定默认算法，保持 ZRAM=y 和 WRITEBACK
      GLOBAL_FLAGS=(
          "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y"
+         "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
          "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
      )
