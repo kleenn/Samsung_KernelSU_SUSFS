@@ -29,100 +29,68 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* "$KERNEL_SRC/lib/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
-     
-     # 【终极降维打击：物理摊平！把 lib 库里的算法实现全量复制到 crypto，防静态库剥离！】
-     find $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/ -type f \( -name "*.c" -o -name "*.S" \) -exec cp {} "$KERNEL_SRC/crypto/" \; || true
-     find $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus/ -type f \( -name "*.c" -o -name "*.S" \) -exec cp {} "$KERNEL_SRC/crypto/" \; || true
-     
-     # 强制在 crypto/Makefile 里将摊平的文件全量写入 obj-y！
-     for cfile in $(ls "$KERNEL_SRC/crypto/"lz4k*.c "$KERNEL_SRC/crypto/"lz4k*.S 2>/dev/null); do
-         objname="$(basename "$cfile" | sed 's/\.[cS]$/.o/')"
-         grep -q "^obj-y += $objname" "$KERNEL_SRC/crypto/Makefile" || echo "obj-y += $objname" >> "$KERNEL_SRC/crypto/Makefile"
-     done
 
-     # 【Kconfig 护盾修补与补丁应用】
-     cp "$KERNEL_SRC/drivers/block/zram/Kconfig" "$KERNEL_SRC/drivers/block/zram/Kconfig.bak"
-     cp "$KERNEL_SRC/lib/Kconfig" "$KERNEL_SRC/lib/Kconfig.bak"
-     cp "$KERNEL_SRC/crypto/Kconfig" "$KERNEL_SRC/crypto/Kconfig.bak"
-     
+     # 【回归初心：原生补丁应用机制】
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     mv "$KERNEL_SRC/drivers/block/zram/Kconfig.bak" "$KERNEL_SRC/drivers/block/zram/Kconfig"
-     mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
-     mv "$KERNEL_SRC/crypto/Kconfig.bak" "$KERNEL_SRC/crypto/Kconfig"
+     # 【补丁防漏底：强行补齐必要的编译指令】
+     grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
+     grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
+     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
+     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
 
-     # 【ZRAM UI 强插：一字不差地回滚到 A 181 经验证 100% 成功的版本！】
-     for zc in $(find . -name zcomp.c); do
+     grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig" || cat <<EOF >> "$KERNEL_SRC/crypto/Kconfig"
+     config CRYPTO_LZ4KD
+         bool "LZ4KD Algorithm"
+         default y
+     config CRYPTO_LZ4K_OPLUS
+         bool "LZ4K OPLUS Algorithm"
+         default y
+     config CRYPTO_LZ4K
+         bool "LZ4K Algorithm"
+         default y
+     EOF
+
+     # 【ZRAM UI 强插：使用验证过最稳定的 sed 版】
+     for zc in $(find "$KERNEL_SRC" -name zcomp.c); do
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
-     
-     # 为 LZ4KD 提供合法可见的身份声明
-     if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
-       echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "config CRYPTO_LZ4K_OPLUS" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4K OPLUS Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "config CRYPTO_LZ4K" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    bool \"LZ4K Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
-     fi
 
-     echo "🚀 部署 Kconfig 幽灵劫持器 (Dual-Layer)..."
+     # 【终极奥义：原生 Defconfig 源头注入 (彻底废弃极度危险的 make 劫持)】
+     echo "🚀 部署原生 Defconfig 模板静态注入..."
      
-     echo '#!/bin/bash' > make_hook_core.sh
-     echo 'for cfg in $(find . -name ".config" -type f 2>/dev/null); do' >> make_hook_core.sh
-     echo '    if grep -q "^# CONFIG_ZRAM is not set" "$cfg"; then' >> make_hook_core.sh
-     echo '        sed -i "s/^# CONFIG_ZRAM is not set/CONFIG_ZRAM=y/g" "$cfg"' >> make_hook_core.sh
-     echo '    elif grep -q "^CONFIG_ZRAM=m" "$cfg"; then' >> make_hook_core.sh
-     echo '        sed -i "s/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g" "$cfg"' >> make_hook_core.sh
-     echo '    elif ! grep -q "^CONFIG_ZRAM=y" "$cfg"; then' >> make_hook_core.sh
-     echo '        echo "CONFIG_ZRAM=y" >> "$cfg"' >> make_hook_core.sh
-     echo '    fi' >> make_hook_core.sh
-     echo '    if grep -q "^# CONFIG_ZSMALLOC is not set" "$cfg"; then' >> make_hook_core.sh
-     echo '        sed -i "s/^# CONFIG_ZSMALLOC is not set/CONFIG_ZSMALLOC=y/g" "$cfg"' >> make_hook_core.sh
-     echo '    elif grep -q "^CONFIG_ZSMALLOC=m" "$cfg"; then' >> make_hook_core.sh
-     echo '        sed -i "s/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g" "$cfg"' >> make_hook_core.sh
-     echo '    elif ! grep -q "^CONFIG_ZSMALLOC=y" "$cfg"; then' >> make_hook_core.sh
-     echo '        echo "CONFIG_ZSMALLOC=y" >> "$cfg"' >> make_hook_core.sh
-     echo '    fi' >> make_hook_core.sh
-     echo '    FLAGS=("CONFIG_KSU_SUSFS" "CONFIG_KSU_SUSFS_SUS_PATH" "CONFIG_KSU_SUSFS_SUS_MOUNT" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT" "CONFIG_KSU_SUSFS_SUS_KSTAT" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS" "CONFIG_KSU_SUSFS_TRY_UMOUNT" "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT" "CONFIG_KSU_SUSFS_SPOOF_UNAME" "CONFIG_KSU_SUSFS_ENABLE_LOG" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS" "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG" "CONFIG_KSU_SUSFS_OPEN_REDIRECT" "CONFIG_KSU_SUSFS_SUS_SU" "CONFIG_KSU_SUSFS_SUS_MAP" "CONFIG_CRYPTO_842" "CONFIG_842_COMPRESS" "CONFIG_842_DECOMPRESS" "CONFIG_CRYPTO_LZ4HC" "CONFIG_LZ4HC_COMPRESS" "CONFIG_LZ4HC_DECOMPRESS" "CONFIG_LZ4K_COMPRESS" "CONFIG_LZ4K_DECOMPRESS" "CONFIG_LZ4KD_COMPRESS" "CONFIG_LZ4KD_DECOMPRESS" "CONFIG_CRYPTO_LZ4K" "CONFIG_CRYPTO_LZ4KD" "CONFIG_CRYPTO_LZ4K_OPLUS" "CONFIG_ZRAM_WRITEBACK" "CONFIG_TCP_CONG_ADVANCED" "CONFIG_TCP_CONG_BBR" "CONFIG_NET_SCH_FQ" "CONFIG_TCP_CONG_WESTWOOD" "CONFIG_BPF_STREAM_PARSER" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "CONFIG_NETFILTER_XT_SET" "CONFIG_IP_SET" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP" "CONFIG_IP_SET_BITMAP_IPMAC" "CONFIG_IP_SET_BITMAP_PORT" "CONFIG_IP_SET_HASH_IP" "CONFIG_IP_SET_HASH_IPMARK" "CONFIG_IP_SET_HASH_IPPORT" "CONFIG_IP_SET_HASH_IPPORTIP" "CONFIG_IP_SET_HASH_IPPORTNET" "CONFIG_IP_SET_HASH_IPMAC" "CONFIG_IP_SET_HASH_MAC" "CONFIG_IP_SET_HASH_NETPORTNET" "CONFIG_IP_SET_HASH_NET" "CONFIG_IP_SET_HASH_NETNET" "CONFIG_IP_SET_HASH_NETPORT" "CONFIG_IP_SET_HASH_NETIFACE" "CONFIG_IP_SET_LIST_SET" "CONFIG_IP6_NF_NAT" "CONFIG_IP6_NF_TARGET_MASQUERADE" "CONFIG_NETFILTER" "CONFIG_NETFILTER_ADVANCED" "CONFIG_NETFILTER_XTABLES" "CONFIG_NETFILTER_XT_TARGET_TPROXY" "CONFIG_NETFILTER_XT_MATCH_SOCKET" "CONFIG_NETFILTER_XT_MATCH_MARK" "CONFIG_NETFILTER_XT_TARGET_MARK" "CONFIG_NETFILTER_XT_TARGET_REDIRECT")' >> make_hook_core.sh
-     echo '    for flag in "${FLAGS[@]}"; do' >> make_hook_core.sh
-     echo '        if grep -q "^# $flag is not set" "$cfg"; then' >> make_hook_core.sh
-     echo '            sed -i "s/^# $flag is not set/$flag=y/g" "$cfg"' >> make_hook_core.sh
-     echo '        elif ! grep -q "^$flag=y" "$cfg"; then' >> make_hook_core.sh
-     echo '            echo "$flag=y" >> "$cfg"' >> make_hook_core.sh
-     echo '        fi' >> make_hook_core.sh
-     echo '    done' >> make_hook_core.sh
-     echo '    sed -i "s/^CONFIG_TCP_CONG_BIC=.*/# CONFIG_TCP_CONG_BIC is not set/g" "$cfg" || true' >> make_hook_core.sh
-     echo '    sed -i "s/^CONFIG_TCP_CONG_HTCP=.*/# CONFIG_TCP_CONG_HTCP is not set/g" "$cfg" || true' >> make_hook_core.sh
-     echo 'done' >> make_hook_core.sh
-     echo 'if [ -n "$ORIG_MAKE_BIN" ]; then' >> make_hook_core.sh
-     echo '    exec "$ORIG_MAKE_BIN" "$@"' >> make_hook_core.sh
-     echo 'else' >> make_hook_core.sh
-     echo '    ORIG=$(which -a make | grep -v "\.hook_bin/make" | head -n 1)' >> make_hook_core.sh
-     echo '    exec "$ORIG" "$@"' >> make_hook_core.sh
-     echo 'fi' >> make_hook_core.sh
-     chmod +x make_hook_core.sh
-
-     ABS_WORKSPACE="$(pwd)"
-     for PREBUILT_MAKE in $(find . -path "*/prebuilts/build-tools/*/bin/make" -type f); do
-         if [[ ! "$PREBUILT_MAKE" == *".orig"* ]]; then
-             echo "✅ 截获底层私有 make: $PREBUILT_MAKE"
-             mv "$PREBUILT_MAKE" "${PREBUILT_MAKE}.orig"
-             echo '#!/bin/bash' > "$PREBUILT_MAKE"
-             echo "export ORIG_MAKE_BIN=\"$ABS_WORKSPACE/${PREBUILT_MAKE}.orig\"" >> "$PREBUILT_MAKE"
-             echo "\"$ABS_WORKSPACE/make_hook_core.sh\" \"\$@\"" >> "$PREBUILT_MAKE"
-             chmod +x "$PREBUILT_MAKE"
-         fi
+     FLAGS=(
+         "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
+         "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+         "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+         "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+         "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
+         "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
+         "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y" "CONFIG_ZRAM_WRITEBACK=y"
+         "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
+         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y"
+     )
+     
+     # 遍历所有的配置模板，将我们的黑科技强制变成本地原生配置！
+     for defconfig in $(find . -name "*defconfig"); do
+         for flag in "${FLAGS[@]}"; do
+             key=$(echo "$flag" | cut -d'=' -f1)
+             sed -i "/^$key=/d" "$defconfig"
+             sed -i "/^# $key is not set/d" "$defconfig"
+             echo "$flag" >> "$defconfig"
+         done
+         # 彻底物理断绝会报错的 TCP_BIC 与 HTCP
+         sed -i "/^CONFIG_TCP_CONG_BIC/d" "$defconfig"
+         echo "# CONFIG_TCP_CONG_BIC is not set" >> "$defconfig"
+         sed -i "/^CONFIG_TCP_CONG_HTCP/d" "$defconfig"
+         echo "# CONFIG_TCP_CONG_HTCP is not set" >> "$defconfig"
      done
-
-     mkdir -p .hook_bin
-     cp make_hook_core.sh .hook_bin/make
-     export PATH="$ABS_WORKSPACE/.hook_bin:$PATH"
      
      echo "Building the kernel..."
      if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" || "${{ inputs.branch }}" == "SM-X710-Oneui6.1.1" ]]; then
