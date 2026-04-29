@@ -30,29 +30,21 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
      
-     # 【终极缺失补全：打碎子目录黑盒，全域摊平式物理强链！】
-     # 1. 强链 crypto 层接口
-     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
-     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
-     
-     # 2. 彻底废除可能存在问题的子 Makefile
-     rm -f "$KERNEL_SRC/lib/lz4k/Makefile" "$KERNEL_SRC/lib/lz4kd/Makefile" "$KERNEL_SRC/lib/lz4k_oplus/Makefile" 2>/dev/null || true
-     
-     # 3. 物理搜捕所有的底层实现 .c 文件，直接强制作为 vmlinux 内核核心 obj-y 打包
-     for dir in lz4k lz4kd lz4k_oplus; do
+     # 【终极降维打击：现场捏造无敌 Makefile，解决 undefined symbol】
+     for dir in lz4k lz4k_oplus; do
          if [ -d "$KERNEL_SRC/lib/$dir" ]; then
-             for cfile in $(find "$KERNEL_SRC/lib/$dir" -name "*.c" 2>/dev/null); do
-                 rel="${cfile#$KERNEL_SRC/lib/}"
-                 grep -q "${rel%.c}.o" "$KERNEL_SRC/lib/Makefile" || echo "obj-y += ${rel%.c}.o" >> "$KERNEL_SRC/lib/Makefile"
+             rm -f "$KERNEL_SRC/lib/$dir/Makefile"
+             touch "$KERNEL_SRC/lib/$dir/Makefile"
+             for c in $(find "$KERNEL_SRC/lib/$dir" -maxdepth 1 -name "*.c"); do
+                 base=$(basename "$c" .c)
+                 echo "obj-y += $base.o" >> "$KERNEL_SRC/lib/$dir/Makefile"
              done
+             grep -q "$dir/" "$KERNEL_SRC/lib/Makefile" || echo "obj-y += $dir/" >> "$KERNEL_SRC/lib/Makefile"
          fi
      done
 
-     # 如果有散落在根目录的 c 文件，一并兜底强链
-     for cfile in $(ls "$KERNEL_SRC/lib/"lz4k*.c 2>/dev/null || true); do
-         rel=$(basename "$cfile")
-         grep -q "${rel%.c}.o" "$KERNEL_SRC/lib/Makefile" || echo "obj-y += ${rel%.c}.o" >> "$KERNEL_SRC/lib/Makefile"
-     done
+     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
+     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
 
      # 【Kconfig 护盾修补与补丁应用】
      cp "$KERNEL_SRC/drivers/block/zram/Kconfig" "$KERNEL_SRC/drivers/block/zram/Kconfig.bak"
@@ -67,9 +59,12 @@ runs:
      mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
      mv "$KERNEL_SRC/crypto/Kconfig.bak" "$KERNEL_SRC/crypto/Kconfig"
 
-     # 【ZRAM UI 强插】
-     awk '{ if ($0 ~ /"lzo",/) { print "\t\"lz4kd\","; print "\t\"lz4k_oplus\","; print "\t\"842\","; print "\t\"lz4hc\","; print "\t\"lz4k\","; print $0; } else { print $0; } }' "$KERNEL_SRC/drivers/block/zram/zcomp.c" > temp_zcomp.c && mv temp_zcomp.c "$KERNEL_SRC/drivers/block/zram/zcomp.c"
+     # 【ZRAM UI 强插：严格回滚到 A 181 经验证 100% 成功的 sed 版本！】
+     for zc in $(find "$KERNEL_SRC" -name zcomp.c); do
+         sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
+     done
      
+     # 为 LZ4KD 提供合法可见的身份声明
      if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
        echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
        echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
