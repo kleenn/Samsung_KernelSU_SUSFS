@@ -22,17 +22,10 @@ runs:
      done
      [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
-     # 【欺骗安检员：废除 GKI 符号裁剪，并将我们的模块强行加入官方白名单！】
+     # 【欺骗安检员：防止模块白名单熔断】
      find . -name "build.config*" -type f -exec sed -i 's/TRIM_NONLISTED_KMI=1/TRIM_NONLISTED_KMI=0/g' {} + || true
      find . -name "build.config*" -type f -exec sed -i 's/KMI_SYMBOL_LIST_STRICT_MODE=1/KMI_SYMBOL_LIST_STRICT_MODE=0/g' {} + || true
-     if [ -f "$KERNEL_SRC/android/gki_aarch64_modules" ]; then
-         grep -q "mm/zsmalloc.ko" "$KERNEL_SRC/android/gki_aarch64_modules" || echo "mm/zsmalloc.ko" >> "$KERNEL_SRC/android/gki_aarch64_modules"
-     fi
-     if [ -f "$KERNEL_SRC/android/gki_aarch64_core_modules" ]; then
-         grep -q "mm/zsmalloc.ko" "$KERNEL_SRC/android/gki_aarch64_core_modules" || echo "mm/zsmalloc.ko" >> "$KERNEL_SRC/android/gki_aarch64_core_modules"
-     fi
 
-     # 【ZRAM 源码复制与底层破防】
      awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/key.h" > temp_key.h && mv temp_key.h "$KERNEL_SRC/include/linux/key.h" || true
      awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/cred.h" > temp_cred.h && mv temp_cred.h "$KERNEL_SRC/include/linux/cred.h" || true
 
@@ -41,18 +34,19 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     # 【经验大成 1：暴力强链】
      grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
      grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
      grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
      grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
 
-     # 【补丁防漏底应用】
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     # 【经验大成 2：Kconfig 护盾修补】
+     # 【降维打击 1：篡改 Kconfig，彻底剥夺三星将 ZRAM 编译为外部模块的能力！】
+     sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
+     sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
+
      if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
        echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
        echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
@@ -65,12 +59,10 @@ runs:
        echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
      fi
 
-     # 【经验大成 3：ZRAM UI 强插】
      for zc in $(find . -name zcomp.c); do
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
 
-     # 【经验大成 4：原生 Defconfig 隔离注入】
      echo "🚀 部署原生 Defconfig 模板隔离注入..."
      
      CORE_FLAGS=(
@@ -87,9 +79,9 @@ runs:
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
      )
      
-     # 【终极奥义】：完美恢复 ZRAM=m, ZSMALLOC=m 确保留存为模块供手机加载。包含 WRITEBACK！
+     # 配合内置化的 ZRAM=y 和 WRITEBACK
      GLOBAL_FLAGS=(
-         "CONFIG_ZRAM=m" "CONFIG_ZSMALLOC=m" "CONFIG_ZRAM_WRITEBACK=y"
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y"
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
          "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
      )
