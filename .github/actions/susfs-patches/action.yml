@@ -18,13 +18,11 @@ runs:
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       # 保护 SukiSU/KSU-Next 专属代码，剔除官方对 supercall 的修改
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
        sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
        
-       # 安全打补丁 (回归 A 189 的完美状态)
        patch -p1 < 10_enable_susfs_for_ksu.patch || true
 
        SUSFS_VERSION="v2.1.0"
@@ -32,7 +30,6 @@ runs:
        rm -rf multi_manager.patch multi_sepolicy_fix.patch
        for p in *.patch; do patch -p1 < "$p" || true; done
 
-       # 常规特性兼容补丁
        sed -i 's/do_umount:/do_umount:;/g' kernel/hook/setuid_hook.c || true
        sed -i '/#include "feature\/adb_root.h"/a #include "hook\/setuid_hook.h"' kernel/core/init.c || true
        sed -i '/#include "hook\/setuid_hook.h"/a #include "feature\/sucompat.h"' kernel/core/init.c || true
@@ -45,11 +42,9 @@ runs:
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
 
-       # SUSFS 初始化点火
        sed -i '1i extern void susfs_init(void);' kernel/core/init.c
        awk '/ksu_supercalls_init\(\);/{print; print "    susfs_init(); // SUSFS IGNITION"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
 
-       # 核心 Stubs 填充
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -60,33 +55,34 @@ runs:
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg) { return 0; }"
        } >> kernel/core/init.c
 
-       # 【绝对真理 1】：还原为 A 189 成功编译的 extern void
+       # 注入外部声明 (恢复为正确的 extern void，与 susfs.h 一致，避免冲突)
        sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
-       sed -i '1i #include <linux/ioctl.h>' kernel/supercall/dispatch.c || true
 
-       # 【终极 IOCTL 解码】：剥离加密外壳，提取类型(_IOC_TYPE)和序号(_IOC_NR)动态匹配，永不脱靶！
+       # 【降维打击 2：斩首级注入】动态搜寻处理函数的正身大门 `{`，无视 Next 版魔改强行插入裸代码
        awk '
        /long ksu_supercall_handle_ioctl/ { in_func=1; print $0; next }
-       in_func && /for *\(i = 0;/ {
-           print "    if (current_uid().val == 0 && _IOC_TYPE(cmd) == 0x55) {"
-           print "        switch(_IOC_NR(cmd)) {"
-           print "            case 0x70: susfs_add_sus_path(&argp); return 0;"
-           print "            case 0x71: susfs_add_sus_path_loop(&argp); return 0;"
-           print "            case 0x72: susfs_add_sus_kstat(&argp); return 0;"
-           print "            case 0x73: susfs_update_sus_kstat(&argp); return 0;"
-           print "            case 0x74: susfs_set_uname(&argp); return 0;"
-           print "            case 0x75: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
-           print "            case 0x76: susfs_add_sus_map(&argp); return 0;"
-           print "            case 0x77: susfs_add_open_redirect(&argp); return 0;"
-           print "            case 0x78: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
-           print "            case 0x79: susfs_enable_log(&argp); return 0;"
-           print "            case 0x7A: susfs_set_avc_log_spoofing(&argp); return 0;"
-           print "            case 0x7B: susfs_show_variant(&argp); return 0;"
-           print "            case 0x7C: susfs_show_version(&argp); return 0;"
-           print "            case 0x7D: susfs_get_enabled_features(&argp); return 0;"
+       in_func && /{/ {
+           print $0;
+           print "    if (current_uid().val == 0) {"
+           print "        switch(cmd) {"
+           print "            case 0x55570: susfs_add_sus_path((void __user **)&argp); return 0;"
+           print "            case 0x55571: susfs_add_sus_path_loop((void __user **)&argp); return 0;"
+           print "            case 0x55572: susfs_add_sus_kstat((void __user **)&argp); return 0;"
+           print "            case 0x55573: susfs_update_sus_kstat((void __user **)&argp); return 0;"
+           print "            case 0x55574: susfs_set_uname((void __user **)&argp); return 0;"
+           print "            case 0x55575: susfs_set_cmdline_or_bootconfig((void __user **)&argp); return 0;"
+           print "            case 0x55576: susfs_add_sus_map((void __user **)&argp); return 0;"
+           print "            case 0x55577: susfs_add_open_redirect((void __user **)&argp); return 0;"
+           print "            case 0x55578: susfs_set_hide_sus_mnts_for_non_su_procs((void __user **)&argp); return 0;"
+           print "            case 0x55579: susfs_enable_log((void __user **)&argp); return 0;"
+           print "            case 0x5557A: susfs_set_avc_log_spoofing((void __user **)&argp); return 0;"
+           print "            case 0x5557B: susfs_show_variant((void __user **)&argp); return 0;"
+           print "            case 0x5557C: susfs_show_version((void __user **)&argp); return 0;"
+           print "            case 0x5557D: susfs_get_enabled_features((void __user **)&argp); return 0;"
            print "        }"
            print "    }"
-           in_func=0
+           in_func=0;
+           next
        }
        1
        ' kernel/supercall/dispatch.c > temp_dispatch.c && mv temp_dispatch.c kernel/supercall/dispatch.c
