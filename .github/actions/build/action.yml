@@ -42,8 +42,10 @@ runs:
      cp "$KERNEL_SRC/lib/Kconfig" "$KERNEL_SRC/lib/Kconfig.bak"
      cp "$KERNEL_SRC/crypto/Kconfig" "$KERNEL_SRC/crypto/Kconfig.bak"
      
-     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
-     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
+     # 动态提取内核版本修复路径断链 (例如从 SM-S901E-Oneui8-android12-5.10 提取 5.10)
+     KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
+     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
+     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
      mv "$KERNEL_SRC/drivers/block/zram/Kconfig.bak" "$KERNEL_SRC/drivers/block/zram/Kconfig"
      mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
@@ -102,21 +104,22 @@ runs:
      echo 'fi' >> make_hook_core.sh
      chmod +x make_hook_core.sh
 
-     # 【全域拦截】：遍历并物理替换掉所有的预编译 make，不放过任何逃逸分支！
+     # 【全域拦截升级版】：固定所有相对路径引用，写死绝对路径，粉碎执行目录漂移！
+     ABS_WORKSPACE="$(pwd)"
      for PREBUILT_MAKE in $(find . -path "*/prebuilts/build-tools/*/bin/make" -type f); do
          if [[ ! "$PREBUILT_MAKE" == *".orig"* ]]; then
              echo "✅ 截获底层私有 make: $PREBUILT_MAKE"
              mv "$PREBUILT_MAKE" "${PREBUILT_MAKE}.orig"
              echo '#!/bin/bash' > "$PREBUILT_MAKE"
-             echo 'export ORIG_MAKE_BIN="$(pwd)/'"${PREBUILT_MAKE}.orig"'"' >> "$PREBUILT_MAKE"
-             echo '"$(pwd)/make_hook_core.sh" "$@"' >> "$PREBUILT_MAKE"
+             echo "export ORIG_MAKE_BIN=\"$ABS_WORKSPACE/${PREBUILT_MAKE}.orig\"" >> "$PREBUILT_MAKE"
+             echo "\"$ABS_WORKSPACE/make_hook_core.sh\" \"\$@\"" >> "$PREBUILT_MAKE"
              chmod +x "$PREBUILT_MAKE"
          fi
      done
 
      mkdir -p .hook_bin
      cp make_hook_core.sh .hook_bin/make
-     export PATH="$(pwd)/.hook_bin:$PATH"
+     export PATH="$ABS_WORKSPACE/.hook_bin:$PATH"
      
      echo "Building the kernel..."
      if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" || "${{ inputs.branch }}" == "SM-X710-Oneui6.1.1" ]]; then
