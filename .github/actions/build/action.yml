@@ -15,13 +15,37 @@ runs:
      set -x
      cd "$CONFIG"
      
-     # 【Kconfig 护盾修补】：为 LZ4KD 提供合法且可见的身份声明，附带 default y，彻底杜绝 syncconfig 抹除！
      KERNEL_SRC=""
      for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
        if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
      done
      [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+
+     # 【ZRAM 源码复制与底层破防】（必须在这补回！）
+     awk '/struct assoc_array keys;/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/key.h" > temp_key.h && mv temp_key.h "$KERNEL_SRC/include/linux/key.h" || true
+     awk '/struct cred \{/{print "#include <linux/assoc_array.h>"}1' "$KERNEL_SRC/include/linux/cred.h" > temp_cred.h && mv temp_cred.h "$KERNEL_SRC/include/linux/cred.h" || true
+
+     cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* "$KERNEL_SRC/include/linux/" || true
+     cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* "$KERNEL_SRC/lib/" || true
+     cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
+     cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
      
+     # 【Kconfig 护盾修补与补丁应用】
+     cp "$KERNEL_SRC/drivers/block/zram/Kconfig" "$KERNEL_SRC/drivers/block/zram/Kconfig.bak"
+     cp "$KERNEL_SRC/lib/Kconfig" "$KERNEL_SRC/lib/Kconfig.bak"
+     cp "$KERNEL_SRC/crypto/Kconfig" "$KERNEL_SRC/crypto/Kconfig.bak"
+     
+     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
+     (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
+
+     mv "$KERNEL_SRC/drivers/block/zram/Kconfig.bak" "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
+     mv "$KERNEL_SRC/crypto/Kconfig.bak" "$KERNEL_SRC/crypto/Kconfig"
+
+     # 【ZRAM UI 强插】：把你见过的所有神级算法，强插到 UI 列表！
+     awk '/static const char \* const backends\[\] = \{/{print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"842\",\n\t\"lz4hc\",\n\t\"lz4k\","; next}1' "$KERNEL_SRC/drivers/block/zram/zcomp.c" > temp_zcomp.c && mv temp_zcomp.c "$KERNEL_SRC/drivers/block/zram/zcomp.c"
+     
+     # 为 LZ4KD 提供合法可见的身份声明
      if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
        echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
        echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
@@ -39,9 +63,7 @@ runs:
      
      cat << 'EOF' > make_hook_core.sh
      #!/bin/bash
-     # 拦截并修改所有生成的 .config
      for cfg in $(find . -name ".config" -type f 2>/dev/null); do
-         # 强制内建 ZRAM 及其内存分配器 (全兼容容错替换)
          if grep -q "^# CONFIG_ZRAM is not set" "$cfg"; then
              sed -i "s/^# CONFIG_ZRAM is not set/CONFIG_ZRAM=y/g" "$cfg"
          elif grep -q "^CONFIG_ZRAM=m" "$cfg"; then
@@ -103,7 +125,6 @@ runs:
      EOF
      chmod +x make_hook_core.sh
 
-     # 第一层劫持：物理替换预编译 make（最高优先级防御）
      PREBUILT_MAKE=$(find . -path "*/prebuilts/build-tools/*/bin/make" -type f | head -n 1)
      if [ -n "$PREBUILT_MAKE" ]; then
          echo "✅ 截获底层构建私有预编译 make: $PREBUILT_MAKE"
@@ -118,7 +139,6 @@ EOF_WRAPPER
          echo "⚠️ 未发现 prebuilts make，依赖环境变量劫持..."
      fi
 
-     # 第二层劫持：环境变量兜底
      mkdir -p .hook_bin
      cp make_hook_core.sh .hook_bin/make
      export PATH="$(pwd)/.hook_bin:$PATH"
