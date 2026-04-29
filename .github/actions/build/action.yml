@@ -30,12 +30,12 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
      
-     # 【致命缺失补全：强插 Makefile 链接规则，彻底粉碎 undefined symbol！】
-     grep -q "lz4k" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
-     grep -q "lz4k_oplus" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
+     # 【致命缺失补全：精准链接 Makefile，彻底粉碎 undefined symbol】
+     grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
+     grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
      grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
      grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
-     grep -q "lz4k_oplus.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus.o' >> "$KERNEL_SRC/crypto/Makefile"
+     # 物理剔除错误行：crypto目录下根本没有lz4k_oplus.c，绝不能在crypto/Makefile里编译它！
 
      # 【Kconfig 护盾修补与补丁应用】
      cp "$KERNEL_SRC/drivers/block/zram/Kconfig" "$KERNEL_SRC/drivers/block/zram/Kconfig.bak"
@@ -51,8 +51,8 @@ runs:
      mv "$KERNEL_SRC/lib/Kconfig.bak" "$KERNEL_SRC/lib/Kconfig"
      mv "$KERNEL_SRC/crypto/Kconfig.bak" "$KERNEL_SRC/crypto/Kconfig"
 
-     # 【ZRAM UI 强插：改用极致精准的 sed 定位，无视格式化差异】
-     sed -i '/backends\[\] = {/a \t"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",' "$KERNEL_SRC/drivers/block/zram/zcomp.c" || true
+     # 【ZRAM UI 强插：改用极致精准的 awk 定位，无视任何格式化差异】
+     awk '/static const char \* const backends\[\]/ {print; print "\t\"lz4kd\",\n\t\"lz4k_oplus\",\n\t\"842\",\n\t\"lz4hc\",\n\t\"lz4k\","; next}1' "$KERNEL_SRC/drivers/block/zram/zcomp.c" > temp_zcomp.c && mv temp_zcomp.c "$KERNEL_SRC/drivers/block/zram/zcomp.c"
      
      # 为 LZ4KD 提供合法可见的身份声明
      if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
@@ -104,7 +104,6 @@ runs:
      echo 'fi' >> make_hook_core.sh
      chmod +x make_hook_core.sh
 
-     # 【全域拦截升级版】：固定所有相对路径引用，写死绝对路径，粉碎执行目录漂移！
      ABS_WORKSPACE="$(pwd)"
      for PREBUILT_MAKE in $(find . -path "*/prebuilts/build-tools/*/bin/make" -type f); do
          if [[ ! "$PREBUILT_MAKE" == *".orig"* ]]; then
