@@ -30,35 +30,36 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     # 【回归初心：原生补丁应用机制】
+     # 【经验大成 1：暴力强链，杜绝 LTO 静态库剥离引发的 undefined symbol】
+     grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
+     grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-y += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
+     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
+     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-y += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
+
+     # 【补丁防漏底应用】
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     # 【补丁防漏底：强行补齐必要的编译指令】
-     grep -q "lz4k/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k/' >> "$KERNEL_SRC/lib/Makefile"
-     grep -q "lz4k_oplus/" "$KERNEL_SRC/lib/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K_OPLUS) += lz4k_oplus/' >> "$KERNEL_SRC/lib/Makefile"
-     grep -q "lz4k.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4K) += lz4k.o' >> "$KERNEL_SRC/crypto/Makefile"
-     grep -q "lz4kd.o" "$KERNEL_SRC/crypto/Makefile" || echo 'obj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' >> "$KERNEL_SRC/crypto/Makefile"
+     # 【经验大成 2：Kconfig 护盾修补，赋予神级算法合法身份】
+     if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
+       echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "config CRYPTO_LZ4K_OPLUS" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4K OPLUS Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "config CRYPTO_LZ4K" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4K Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
+     fi
 
-     grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig" || cat <<EOF >> "$KERNEL_SRC/crypto/Kconfig"
-     config CRYPTO_LZ4KD
-         bool "LZ4KD Algorithm"
-         default y
-     config CRYPTO_LZ4K_OPLUS
-         bool "LZ4K OPLUS Algorithm"
-         default y
-     config CRYPTO_LZ4K
-         bool "LZ4K Algorithm"
-         default y
-     EOF
-
-     # 【ZRAM UI 强插：使用验证过最稳定的 sed 版】
-     for zc in $(find "$KERNEL_SRC" -name zcomp.c); do
+     # 【经验大成 3：ZRAM UI 强插 - 回归验证过 100% 成功的定海神针版本！】
+     for zc in $(find . -name zcomp.c); do
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
 
-     # 【终极奥义：原生 Defconfig 源头注入 (彻底废弃极度危险的 make 劫持)】
+     # 【经验大成 4：原生 Defconfig 模板静态注入 (彻底废弃危险的 Make 劫持，根除并发冲突)】
      echo "🚀 部署原生 Defconfig 模板静态注入..."
      
      FLAGS=(
@@ -74,10 +75,10 @@ runs:
          "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y" "CONFIG_ZRAM_WRITEBACK=y"
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
-         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y"
+         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y"
      )
      
-     # 遍历所有的配置模板，将我们的黑科技强制变成本地原生配置！
      for defconfig in $(find . -name "*defconfig"); do
          for flag in "${FLAGS[@]}"; do
              key=$(echo "$flag" | cut -d'=' -f1)
@@ -85,7 +86,7 @@ runs:
              sed -i "/^# $key is not set/d" "$defconfig"
              echo "$flag" >> "$defconfig"
          done
-         # 彻底物理断绝会报错的 TCP_BIC 与 HTCP
+         # 彻底物理断绝会报错冲突的旧版 TCP 模块
          sed -i "/^CONFIG_TCP_CONG_BIC/d" "$defconfig"
          echo "# CONFIG_TCP_CONG_BIC is not set" >> "$defconfig"
          sed -i "/^CONFIG_TCP_CONG_HTCP/d" "$defconfig"
