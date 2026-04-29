@@ -49,7 +49,7 @@ runs:
        sed -i '1i extern void susfs_init(void);' kernel/core/init.c
        awk '/ksu_supercalls_init\(\);/{print; print "    susfs_init(); // SUSFS IGNITION"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
 
-       # 【Stubs 补全】：补全防检测导致的符号缺失（已找回致命的 sys_reboot 代理！）
+       # 【Stubs 补全】：基于 A 163，保留对 ksu_handle_sys_reboot 这一致命符号的填充！
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -60,36 +60,35 @@ runs:
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) { return 0; }"
        } >> kernel/core/init.c
 
-       # 【绝对真理 2 修正】：将所有 extern 严谨修正为 extern void，杜绝 conflicting types 熔断！
+       # 【绝对真理 2 修正】：保持所有 extern void，杜绝 conflicting types 熔断！
        sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
        
-       # 【柔性容错旁路】：直接在 dispatch 入口截胡指令，打通隧道
+       # 【柔性容错旁路 升级版】：越过 int i; 声明区，在 for 循环前精准截胡，彻底粉碎 C90 报错！
        awk '
-       /long ksu_supercall_handle_ioctl/ { in_func=1 }
-       {
-           print $0
-           if (in_func && $0 ~ /{/) {
-               print "    if (current_uid().val == 0) {"
-               print "        switch(cmd) {"
-               print "            case 0x55570: susfs_add_sus_path(&argp); return 0;"
-               print "            case 0x55571: susfs_add_sus_path_loop(&argp); return 0;"
-               print "            case 0x55572: susfs_add_sus_kstat(&argp); return 0;"
-               print "            case 0x55573: susfs_update_sus_kstat(&argp); return 0;"
-               print "            case 0x55574: susfs_set_uname(&argp); return 0;"
-               print "            case 0x55575: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
-               print "            case 0x55576: susfs_add_sus_map(&argp); return 0;"
-               print "            case 0x55577: susfs_add_open_redirect(&argp); return 0;"
-               print "            case 0x55578: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
-               print "            case 0x55579: susfs_enable_log(&argp); return 0;"
-               print "            case 0x5557A: susfs_set_avc_log_spoofing(&argp); return 0;"
-               print "            case 0x5557B: susfs_show_variant(&argp); return 0;"
-               print "            case 0x5557C: susfs_show_version(&argp); return 0;"
-               print "            case 0x5557D: susfs_get_enabled_features(&argp); return 0;"
-               print "        }"
-               print "    }"
-               in_func=0
-           }
-       }' kernel/supercall/dispatch.c > temp_dispatch.c && mv temp_dispatch.c kernel/supercall/dispatch.c
+       /long ksu_supercall_handle_ioctl/ { in_func=1; print $0; next }
+       in_func && /for *\(i = 0;/ {
+           print "    if (current_uid().val == 0) {"
+           print "        switch(cmd) {"
+           print "            case 0x55570: susfs_add_sus_path(&argp); return 0;"
+           print "            case 0x55571: susfs_add_sus_path_loop(&argp); return 0;"
+           print "            case 0x55572: susfs_add_sus_kstat(&argp); return 0;"
+           print "            case 0x55573: susfs_update_sus_kstat(&argp); return 0;"
+           print "            case 0x55574: susfs_set_uname(&argp); return 0;"
+           print "            case 0x55575: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
+           print "            case 0x55576: susfs_add_sus_map(&argp); return 0;"
+           print "            case 0x55577: susfs_add_open_redirect(&argp); return 0;"
+           print "            case 0x55578: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
+           print "            case 0x55579: susfs_enable_log(&argp); return 0;"
+           print "            case 0x5557A: susfs_set_avc_log_spoofing(&argp); return 0;"
+           print "            case 0x5557B: susfs_show_variant(&argp); return 0;"
+           print "            case 0x5557C: susfs_show_version(&argp); return 0;"
+           print "            case 0x5557D: susfs_get_enabled_features(&argp); return 0;"
+           print "        }"
+           print "    }"
+           in_func=0
+       }
+       1
+       ' kernel/supercall/dispatch.c > temp_dispatch.c && mv temp_dispatch.c kernel/supercall/dispatch.c
 
    - name: Apply SUSFS to Kernel
      shell: bash
@@ -109,6 +108,9 @@ runs:
           
       patch -p1 < "$SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" || true
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c
+
+      echo "🚀 物理对齐 mnt_init，强制唤醒 SUSFS..."
+      awk '/init_mount_tree\(\);/{print; print "    extern void susfs_init(void);\n    susfs_init();"; next}1' fs/namespace.c > temp_ns_init.c && mv temp_ns_init.c fs/namespace.c
 
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
