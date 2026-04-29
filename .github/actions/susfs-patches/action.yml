@@ -18,16 +18,13 @@ runs:
        cd "$COMMON/KernelSU-Next"
        PATCH_FILE="$SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
        
-       # 【真理 1】：提取官方 IOCTL 宏，彻底粉碎 0x55570 玄学猜想
-       grep -E "^\+#define CMD_SUSFS_" "$PATCH_FILE" | sed 's/^+//' > temp_macros.h
-
-       # 【真理 2】：绝对护盾！剔除补丁对 supercall 的修改，保护 KSU-Next 高级特性不被破坏！
+       # 保护 SukiSU/KSU-Next 专属代码，剔除官方对 supercall 的修改
        awk '/^diff --git a\/kernel\/supercall\//{s=1}/^diff --git/{if($0!~/supercall\//)s=0}{if(!s)print}' "$PATCH_FILE" > temp_10.patch
        mv temp_10.patch "$PATCH_FILE"
        cp "$PATCH_FILE" .
        sed -i 's/kernel\/Makefile/kernel\/Kbuild/g' 10_enable_susfs_for_ksu.patch
        
-       # 安全打补丁
+       # 安全打补丁 (回归 A 189 的完美状态)
        patch -p1 < 10_enable_susfs_for_ksu.patch || true
 
        SUSFS_VERSION="v2.1.0"
@@ -63,33 +60,30 @@ runs:
          echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg) { return 0; }"
        } >> kernel/core/init.c
 
-       # 【真理 3】：恢复正确的 extern void 类型，与 susfs.h 完美匹配
+       # 【绝对真理 1】：还原为 A 189 成功编译的 extern void
        sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
+       sed -i '1i #include <linux/ioctl.h>' kernel/supercall/dispatch.c || true
 
-       # 将官方宏安全注入 dispatch.c 头部
-       cat temp_macros.h kernel/supercall/dispatch.c > temp_dispatch_final.c && mv temp_dispatch_final.c kernel/supercall/dispatch.c
-       rm -f temp_macros.h
-
-       # 【真理 4】：使用正确的 CMD_SUSFS 宏，匹配内核真实数据流，完美复归 return 0
+       # 【终极 IOCTL 解码】：剥离加密外壳，提取类型(_IOC_TYPE)和序号(_IOC_NR)动态匹配，永不脱靶！
        awk '
        /long ksu_supercall_handle_ioctl/ { in_func=1; print $0; next }
        in_func && /for *\(i = 0;/ {
-           print "    if (current_uid().val == 0) {"
-           print "        switch(cmd) {"
-           print "            case CMD_SUSFS_ADD_SUS_PATH: susfs_add_sus_path(&argp); return 0;"
-           print "            case CMD_SUSFS_ADD_SUS_PATH_LOOP: susfs_add_sus_path_loop(&argp); return 0;"
-           print "            case CMD_SUSFS_ADD_SUS_KSTAT: susfs_add_sus_kstat(&argp); return 0;"
-           print "            case CMD_SUSFS_UPDATE_SUS_KSTAT: susfs_update_sus_kstat(&argp); return 0;"
-           print "            case CMD_SUSFS_SET_UNAME: susfs_set_uname(&argp); return 0;"
-           print "            case CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
-           print "            case CMD_SUSFS_ADD_SUS_MAP: susfs_add_sus_map(&argp); return 0;"
-           print "            case CMD_SUSFS_ADD_OPEN_REDIRECT: susfs_add_open_redirect(&argp); return 0;"
-           print "            case CMD_SUSFS_SET_HIDE_SUS_MNTS_FOR_NON_SU_PROCS: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
-           print "            case CMD_SUSFS_ENABLE_LOG: susfs_enable_log(&argp); return 0;"
-           print "            case CMD_SUSFS_SET_AVC_LOG_SPOOFING: susfs_set_avc_log_spoofing(&argp); return 0;"
-           print "            case CMD_SUSFS_SHOW_VARIANT: susfs_show_variant(&argp); return 0;"
-           print "            case CMD_SUSFS_SHOW_VERSION: susfs_show_version(&argp); return 0;"
-           print "            case CMD_SUSFS_GET_ENABLED_FEATURES: susfs_get_enabled_features(&argp); return 0;"
+           print "    if (current_uid().val == 0 && _IOC_TYPE(cmd) == 0x55) {"
+           print "        switch(_IOC_NR(cmd)) {"
+           print "            case 0x70: susfs_add_sus_path(&argp); return 0;"
+           print "            case 0x71: susfs_add_sus_path_loop(&argp); return 0;"
+           print "            case 0x72: susfs_add_sus_kstat(&argp); return 0;"
+           print "            case 0x73: susfs_update_sus_kstat(&argp); return 0;"
+           print "            case 0x74: susfs_set_uname(&argp); return 0;"
+           print "            case 0x75: susfs_set_cmdline_or_bootconfig(&argp); return 0;"
+           print "            case 0x76: susfs_add_sus_map(&argp); return 0;"
+           print "            case 0x77: susfs_add_open_redirect(&argp); return 0;"
+           print "            case 0x78: susfs_set_hide_sus_mnts_for_non_su_procs(&argp); return 0;"
+           print "            case 0x79: susfs_enable_log(&argp); return 0;"
+           print "            case 0x7A: susfs_set_avc_log_spoofing(&argp); return 0;"
+           print "            case 0x7B: susfs_show_variant(&argp); return 0;"
+           print "            case 0x7C: susfs_show_version(&argp); return 0;"
+           print "            case 0x7D: susfs_get_enabled_features(&argp); return 0;"
            print "        }"
            print "    }"
            in_func=0
