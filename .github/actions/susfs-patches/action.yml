@@ -45,11 +45,11 @@ runs:
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
 
-       # 【精准注入】：仅在 SukiSU 初始化核心点火（剔除 namespace 的双重点火）
+       # 【精准注入】：在 SukiSU 初始化核心点火
        sed -i '1i extern void susfs_init(void);' kernel/core/init.c
        awk '/ksu_supercalls_init\(\);/{print; print "    susfs_init(); // SUSFS IGNITION"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
 
-       # 【Stubs 补全】：保留 sys_reboot 空壳，防断链
+       # 【Stubs 补全】：修正致死签名，将 **arg 严格降级为 *arg，完美对齐 reboot.c！
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -57,13 +57,13 @@ runs:
          echo "void ksu_set_task_mark(int pid, int mark) {}"
          echo "void ksu_mark_all_process(int mark) {}"
          echo "void ksu_unmark_all_process(int mark) {}"
-         echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg) { return 0; }"
+         echo "int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg) { return 0; }"
        } >> kernel/core/init.c
 
        # 【绝对真理 2 修正】：保持 extern void 签名
        sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
        
-       # 【柔性容错旁路 升级版】：打通 IOCTL 隧道
+       # 【柔性容错旁路】：打通 IOCTL 隧道
        awk '
        /long ksu_supercall_handle_ioctl/ { in_func=1; print $0; next }
        in_func && /for *\(i = 0;/ {
