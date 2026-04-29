@@ -291,19 +291,52 @@ jobs:
         with:
          branch: ${{ inputs.branch }}
 
-      # 编译产物自验证探针 (挂载在 Build 步骤之后！)
-      - name: Self-Verification Audit
+      - name: Self-Verification Audit & Forensic Dump
         if: always()
         run: |
-          echo "=== 核心特性落盘全量核验 ==="
+          echo "======================================================="
+          echo "          === 终极法医鉴定：核心特性落盘全量核验 ==="
+          echo "======================================================="
           cd $GITHUB_WORKSPACE
+          
+          echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
           CONFIG_FILE=$(find . -name ".config" -type f | head -n 1)
           if [ -f "$CONFIG_FILE" ]; then
-            echo "✅ 成功截获最终底层配置文件: $CONFIG_FILE"
-            grep -iE "KSU_SUSFS|ZRAM|LZ4KD|NETFILTER_XT_TARGET_TPROXY|IP_SET_HASH_NET" "$CONFIG_FILE" || echo "❌ 严重警告：有核心参数被剔除！"
+            echo "✅ 截获文件: $CONFIG_FILE"
+            grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
           else
-            echo "❌ 未能在工作区发现 .config，可能是底层 build 脚本采用了非标准输出架构"
+            echo "❌ 未发现 .config"
           fi
+          
+          echo -e "\n[2] 查验 zcomp.c (神级算法是否注入 UI 阵列):"
+          ZCOMP_FILE=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1)
+          if [ -f "$ZCOMP_FILE" ]; then
+            grep -A 8 "static const char \* const backends" "$ZCOMP_FILE"
+          else
+            echo "❌ 未发现 zcomp.c"
+          fi
+          
+          echo -e "\n[3] 查验 init.c (SUSFS 符号与挂载点火):"
+          INIT_FILE=$(find . -name "init.c" -type f | grep "core" | head -n 1)
+          if [ -f "$INIT_FILE" ]; then
+            echo "--- extern 声明区 ---"
+            head -n 20 "$INIT_FILE" | grep "susfs_init" || echo "未找到 extern 声明"
+            echo "--- 点火区 ---"
+            grep -A 3 "ksu_supercalls_init" "$INIT_FILE"
+            echo "--- 缺失符号填充区 ---"
+            tail -n 15 "$INIT_FILE"
+          else
+            echo "❌ 未发现 init.c"
+          fi
+          
+          echo -e "\n[4] 查验 dispatch.c (IOCTL 强行旁路):"
+          DISPATCH_FILE=$(find . -name "dispatch.c" -type f | grep "supercall" | head -n 1)
+          if [ -f "$DISPATCH_FILE" ]; then
+            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 25
+          else
+            echo "❌ 未发现 dispatch.c"
+          fi
+          echo "======================================================="
           
       - name: Prepare AnyKernel3
         uses: ./.github/actions/ak3zip-prep
