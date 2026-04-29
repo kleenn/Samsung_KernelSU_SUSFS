@@ -15,7 +15,7 @@ runs:
      set -x
      cd "$CONFIG"
      
-     # 【Kconfig 护盾修补】：为 LZ4KD 提供合法身份声明
+     # 【Kconfig 护盾修补】：为 LZ4KD 提供合法且可见的身份声明，附带 default y，彻底杜绝 syncconfig 抹除！
      KERNEL_SRC=""
      for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
        if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
@@ -24,11 +24,14 @@ runs:
      
      if ! grep -q "config CRYPTO_LZ4KD" "$KERNEL_SRC/crypto/Kconfig"; then
        echo "config CRYPTO_LZ4KD" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4KD Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
        echo "config CRYPTO_LZ4K_OPLUS" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4K OPLUS Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
        echo "config CRYPTO_LZ4K" >> "$KERNEL_SRC/crypto/Kconfig"
-       echo "    tristate" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    bool \"LZ4K Algorithm\"" >> "$KERNEL_SRC/crypto/Kconfig"
+       echo "    default y" >> "$KERNEL_SRC/crypto/Kconfig"
      fi
 
      # 【核弹级无痕劫持升级版】：双层物理+环境变量劫持，彻底封死三星的逃逸路线！
@@ -38,8 +41,22 @@ runs:
      #!/bin/bash
      # 拦截并修改所有生成的 .config
      for cfg in $(find . -name ".config" -type f 2>/dev/null); do
-         sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$cfg"
-         sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$cfg"
+         # 强制内建 ZRAM 及其内存分配器 (全兼容容错替换)
+         if grep -q "^# CONFIG_ZRAM is not set" "$cfg"; then
+             sed -i "s/^# CONFIG_ZRAM is not set/CONFIG_ZRAM=y/g" "$cfg"
+         elif grep -q "^CONFIG_ZRAM=m" "$cfg"; then
+             sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$cfg"
+         elif ! grep -q "^CONFIG_ZRAM=y" "$cfg"; then
+             echo "CONFIG_ZRAM=y" >> "$cfg"
+         fi
+
+         if grep -q "^# CONFIG_ZSMALLOC is not set" "$cfg"; then
+             sed -i "s/^# CONFIG_ZSMALLOC is not set/CONFIG_ZSMALLOC=y/g" "$cfg"
+         elif grep -q "^CONFIG_ZSMALLOC=m" "$cfg"; then
+             sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$cfg"
+         elif ! grep -q "^CONFIG_ZSMALLOC=y" "$cfg"; then
+             echo "CONFIG_ZSMALLOC=y" >> "$cfg"
+         fi
          
          FLAGS=(
              "CONFIG_KSU_SUSFS" "CONFIG_KSU_SUSFS_SUS_PATH" "CONFIG_KSU_SUSFS_SUS_MOUNT"
