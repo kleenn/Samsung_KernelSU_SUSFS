@@ -60,7 +60,7 @@ runs:
          sed -i 's/"lzo",/"lz4kd",\n\t"lz4k_oplus",\n\t"842",\n\t"lz4hc",\n\t"lz4k",\n\t"lzo",/g' "$zc" || true
      done
 
-     # 【经验大成 4：原生 Defconfig 隔离注入 (已剔除导致三星不认 ZRAM 的霸权强制宏)】
+     # 【经验大成 4：原生 Defconfig 隔离注入】
      echo "🚀 部署原生 Defconfig 模板隔离注入..."
      
      CORE_FLAGS=(
@@ -80,6 +80,7 @@ runs:
      GLOBAL_FLAGS=(
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
          "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+         "CONFIG_ZRAM_WRITEBACK=y"
      )
      
      for defconfig in $(find "$KERNEL_SRC" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
