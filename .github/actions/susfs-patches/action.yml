@@ -45,10 +45,11 @@ runs:
        sed -i '1s/^/#define ksu_set_task_tracepoint_flag(x) do { (void)(x); } while (0)\n/' kernel/policy/app_profile.c || true
        sed -i '/#include "ksu.h"/a extern bool ksu_late_loaded;' kernel/supercall/dispatch.c || true
 
-       # 【绝对真理 1】：精准注入 kernelsu_init 函数！
+       # 【精准注入】：在 SukiSU 初始化核心点火
        sed -i '1i extern void susfs_init(void);' kernel/core/init.c
        awk '/ksu_supercalls_init\(\);/{print; print "    susfs_init(); // SUSFS IGNITION"; next}1' kernel/core/init.c > temp_init.c && mv temp_init.c kernel/core/init.c
 
+       # 【Stubs 补全】：补全防检测导致的符号缺失
        {
          echo "bool ksu_late_loaded = false;"
          echo "void ksu_mark_running_process(int pid, bool mark) {}"
@@ -58,10 +59,10 @@ runs:
          echo "void ksu_unmark_all_process(int mark) {}"
        } >> kernel/core/init.c
 
-       # 【绝对真理 2】：直接截胡 ksu_supercall_handle_ioctl 入口！
-       sed -i '1i extern int susfs_add_sus_path(void __user **);\nextern int susfs_add_sus_path_loop(void __user **);\nextern int susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern int susfs_add_sus_kstat(void __user **);\nextern int susfs_update_sus_kstat(void __user **);\nextern int susfs_set_uname(void __user **);\nextern int susfs_set_cmdline_or_bootconfig(void __user **);\nextern int susfs_add_sus_map(void __user **);\nextern int susfs_add_open_redirect(void __user **);\nextern int susfs_enable_log(void __user **);\nextern int susfs_set_avc_log_spoofing(void __user **);\nextern int susfs_show_variant(void __user **);\nextern int susfs_show_version(void __user **);\nextern int susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
+       # 【绝对真理 2 修正】：将所有 extern int 严谨修正为 extern void，杜绝 conflicting types 熔断！
+       sed -i '1i extern void susfs_add_sus_path(void __user **);\nextern void susfs_add_sus_path_loop(void __user **);\nextern void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **);\nextern void susfs_add_sus_kstat(void __user **);\nextern void susfs_update_sus_kstat(void __user **);\nextern void susfs_set_uname(void __user **);\nextern void susfs_set_cmdline_or_bootconfig(void __user **);\nextern void susfs_add_sus_map(void __user **);\nextern void susfs_add_open_redirect(void __user **);\nextern void susfs_enable_log(void __user **);\nextern void susfs_set_avc_log_spoofing(void __user **);\nextern void susfs_show_variant(void __user **);\nextern void susfs_show_version(void __user **);\nextern void susfs_get_enabled_features(void __user **);' kernel/supercall/dispatch.c
        
-       # 【柔性容错匹配】：去掉了长参数后缀，只认函数名，绝对命中！
+       # 【柔性容错旁路】：直接在 dispatch 入口截胡指令，打通隧道
        awk '
        /long ksu_supercall_handle_ioctl/ { in_func=1 }
        {
@@ -117,7 +118,7 @@ runs:
 
       grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
       
-      # 【Kconfig 身份注册】：赋予 SUSFS 合法身份，防止被解析器剥夺！
+      # 【Kconfig 身份注册】：赋予 SUSFS 合法身份
       echo "config KSU_SUSFS" >> fs/Kconfig
       echo "    bool \"SUSFS Support\"" >> fs/Kconfig
       echo "    default y" >> fs/Kconfig
