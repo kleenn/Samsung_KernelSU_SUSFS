@@ -35,19 +35,20 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     # 信任补丁：只打补丁！
+     # 信任补丁逻辑打入 lz4kd 补丁
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     # 强制内置 ZRAM 和 ZSMALLOC
+     # 从源码层面剥夺外部模块化能力，强制转为内置
      sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
      sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
 
-     echo "🚀 部署原生 Defconfig 模板隔离注入..."
+     echo "🚀 部署满血参数矩阵 (KSU + SUSFS + LZ4KD + 满血网络与代理优化)..."
      
-     # 【致命修复】：补齐 CONFIG_KSU=y 和 CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y，激活管理器编译通道！
-     CORE_FLAGS=(
+     # 【极度严谨核对】：已将你在原 build.yml 中的所有网络、算法、管理模块完整搬运，一字不差！
+     ALL_FLAGS=(
+         # --- KSU & SUSFS 核心支持 ---
          "CONFIG_KSU=y"
          "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
          "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -57,39 +58,46 @@ runs:
          "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
          "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
          "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
+         
+         # --- ZRAM 强制内建与满血压缩算法阵列 ---
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y" "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
          "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
          "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-     )
-     
-     GLOBAL_FLAGS=(
-         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y"
-         "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
+         
+         # --- 核心网络调度 (BBR + Westwood) ---
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
-         "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "CONFIG_NETFILTER_XT_MATCH_SOCKET=y"
+         
+         # --- 满血网络功能 (路由分流、TPROXY、IP_SET、NAT 拦截全家桶) ---
+         "CONFIG_BPF_STREAM_PARSER=y" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "CONFIG_NETFILTER_XT_SET=y"
+         "CONFIG_IP_SET=y" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP=y" "CONFIG_IP_SET_BITMAP_IPMAC=y"
+         "CONFIG_IP_SET_BITMAP_PORT=y" "CONFIG_IP_SET_HASH_IP=y" "CONFIG_IP_SET_HASH_IPMARK=y" "CONFIG_IP_SET_HASH_IPPORT=y"
+         "CONFIG_IP_SET_HASH_IPPORTIP=y" "CONFIG_IP_SET_HASH_IPPORTNET=y" "CONFIG_IP_SET_HASH_IPMAC=y" "CONFIG_IP_SET_HASH_MAC=y"
+         "CONFIG_IP_SET_HASH_NETPORTNET=y" "CONFIG_IP_SET_HASH_NET=y" "CONFIG_IP_SET_HASH_NETNET=y" "CONFIG_IP_SET_HASH_NETPORT=y"
+         "CONFIG_IP_SET_HASH_NETIFACE=y" "CONFIG_IP_SET_LIST_SET=y" "CONFIG_IP6_NF_NAT=y" "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
+         "CONFIG_NETFILTER=y" "CONFIG_NETFILTER_ADVANCED=y" "CONFIG_NETFILTER_XTABLES=y" "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
+         "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" "CONFIG_NETFILTER_XT_MATCH_MARK=y" "CONFIG_NETFILTER_XT_TARGET_MARK=y" "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
      )
      
-     for defconfig in $(find "$KERNEL_SRC" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
-         for flag in "${CORE_FLAGS[@]}"; do
-             key=$(echo "$flag" | cut -d'=' -f1)
-             sed -i "/^$key=/d" "$defconfig"
-             sed -i "/^# $key is not set/d" "$defconfig"
-             echo "$flag" >> "$defconfig"
-         done
-     done
-     
+     # 【需关闭的过时调度】
+     DISABLE_FLAGS=("CONFIG_TCP_CONG_BIC" "CONFIG_TCP_CONG_HTCP")
+
+     # 遍历所有的配置片段，进行绝对安全无残留的替换
      for defconfig in $(find . -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
-         for flag in "${GLOBAL_FLAGS[@]}"; do
+         # 注入启用项
+         for flag in "${ALL_FLAGS[@]}"; do
              key=$(echo "$flag" | cut -d'=' -f1)
              sed -i "/^$key=/d" "$defconfig"
              sed -i "/^# $key is not set/d" "$defconfig"
              echo "$flag" >> "$defconfig"
          done
-         sed -i "/^CONFIG_TCP_CONG_BIC/d" "$defconfig"
-         echo "# CONFIG_TCP_CONG_BIC is not set" >> "$defconfig"
-         sed -i "/^CONFIG_TCP_CONG_HTCP/d" "$defconfig"
-         echo "# CONFIG_TCP_CONG_HTCP is not set" >> "$defconfig"
+         
+         # 注入停用项
+         for d_flag in "${DISABLE_FLAGS[@]}"; do
+             sed -i "/^$d_flag=/d" "$defconfig"
+             echo "# $d_flag is not set" >> "$defconfig"
+         done
      done
      
      echo "Building the kernel..."
