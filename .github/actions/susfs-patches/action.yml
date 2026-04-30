@@ -42,23 +42,23 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区
+      # 🚨 SUSFS 冲突精准搭桥区 (awk 绝对防弹版)
       # =========================================================
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
-          sed -i '/#include <linux\/uaccess.h>/i #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/exec.c"
+          awk '/#include <linux\/uaccess.h>/ && !done { print "#ifdef CONFIG_KSU_SUSFS\n#include <linux/susfs_def.h>\n#endif"; print; done=1; next } 1' "$KERNEL_SRC/fs/exec.c" > "$KERNEL_SRC/temp_exec.c" && mv "$KERNEL_SRC/temp_exec.c" "$KERNEL_SRC/fs/exec.c"
           rm -f "$KERNEL_SRC/fs/exec.c.rej"
       fi
 
       if [ -f "$KERNEL_SRC/fs/namespace.c.rej" ]; then
           echo "   🩹 精准修复 fs/namespace.c..."
-          sed -i '/#include "internal.h"/a \n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n#define CL_COPY_MNT_NS BIT(25)\n#endif' "$KERNEL_SRC/fs/namespace.c"
+          awk '/#include "internal.h"/ && !done { print; print "\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux/susfs_def.h>\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n#define CL_COPY_MNT_NS BIT(25)\n#endif"; done=1; next } 1' "$KERNEL_SRC/fs/namespace.c" > "$KERNEL_SRC/temp_ns.c" && mv "$KERNEL_SRC/temp_ns.c" "$KERNEL_SRC/fs/namespace.c"
           rm -f "$KERNEL_SRC/fs/namespace.c.rej"
       fi
 
       if [ -f "$KERNEL_SRC/fs/proc/base.c.rej" ]; then
           echo "   🩹 精准修复 fs/proc/base.c..."
-          sed -i '/#include <trace\/events\/oom.h>/i #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/proc/base.c"
+          awk '/#include <trace\/events\/oom.h>/ && !done { print "#if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif"; print; done=1; next } 1' "$KERNEL_SRC/fs/proc/base.c" > "$KERNEL_SRC/temp_base.c" && mv "$KERNEL_SRC/temp_base.c" "$KERNEL_SRC/fs/proc/base.c"
           rm -f "$KERNEL_SRC/fs/proc/base.c.rej"
       fi
 
@@ -69,7 +69,6 @@ runs:
           rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
-      # SUSFS 通用熔断审计
       REMAINING_REJ=$(find "$KERNEL_SRC" -name "*.rej" -type f)
       if [ -n "$REMAINING_REJ" ]; then
           echo "❌ 发现未知的 SUSFS 补丁冲突！请仙查看："
@@ -99,9 +98,6 @@ runs:
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4kd.patch > lz4kd_clean.patch)
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4k_oplus.patch > lz4k_oplus_clean.patch)
 
-      # =========================================================
-      # 🚨 ZRAM 通用取证熔断系统与动态搭桥
-      # =========================================================
       echo ">>> 应用 lz4kd 补丁..."
       (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch) || echo "⚠️ 触发 ZRAM 偏移警告，介入法医系统..."
 
@@ -126,7 +122,6 @@ runs:
           for f in $REMAINING_OPLUS_REJ; do echo "--- 🚨 冲突文件: $f ---"; cat "$f"; done
           exit 1
       fi
-      # =========================================================
       
       echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
       echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
@@ -207,26 +202,22 @@ runs:
        echo "======================================================="
        echo "   🚨 编译前置法医自检：确认一切修改被 Git 护盾保护！"
        echo "======================================================="
-       
        echo "[1] 检查 zcomp.c 算法注册阵列 (是否包含 lz4kd):"
-       # 【修改点】：向下打印 25 行，确保看全整个 backends 数组
        head -n 50 "$KERNEL_SRC/drivers/block/zram/zcomp.c" | grep -A 25 "backends" || echo "❌ 警告: 未在 zcomp.c 找到注册数组"
        
        echo -e "\n[2] 检查 Kconfig 搭桥结果 (尾部是否成功注入):"
        tail -n 20 "$KERNEL_SRC/drivers/block/zram/Kconfig" || echo "❌ 警告: 未找到 Kconfig"
        
-       echo -e "\n[3] 检查 SukiSU-Ultra 核心目录 (排除隐藏文件干扰):"
-       # 【修改点】：改用 ls -l，不看隐藏文件，直接看核心源码结构
-       ls -l "$KERNEL_SRC/KernelSU" | head -n 10 || echo "❌ 警告: SukiSU-Ultra 目录丢失！"
+       echo -e "\n[3] 检查 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
+       # 【核心动态寻址】：无视底层目录重构，直接让 find 全局搜索！
+       INIT_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "init.c" | head -n 1)
+       if [ -n "$INIT_C" ]; then echo "✅ 截获文件: $INIT_C"; tail -n 15 "$INIT_C"; else echo "❌ 未发现 SukiSU-Ultra init.c"; fi
        
-       echo -e "\n[4] 检查 Git 护盾状态 (最后一次提交记录):"
-       (cd "$KERNEL_SRC" && git log -n 1) || echo "❌ 警告: Git 日志读取失败"
-       
-       echo -e "\n[5] 检查核心拦截点 (fs/read_write.c):"
-       # 【修改点】：扩大打印范围，确保看到 return ksys_read
-       grep -B 2 -A 15 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
-       
-       echo -e "\n[6] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
+       echo -e "\n[4] 检查 SukiSU-Ultra IOCTL 隧道 (dispatch.c / supercall.c):"
+       DISPATCH_C=$(find "$KERNEL_SRC/KernelSU" -type f \( -name "dispatch.c" -o -name "supercall.c" \) | head -n 1)
+       if [ -n "$DISPATCH_C" ]; then echo "✅ 截获文件: $DISPATCH_C"; grep -A 10 "ksu_supercall_handle_ioctl" "$DISPATCH_C" || true; else echo "❌ 未发现 SukiSU-Ultra 隧道核心文件"; fi
+
+       echo -e "\n[5] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
        TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
        if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
        CHECK_CONF=$(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) | head -n 1)
@@ -236,4 +227,3 @@ runs:
            echo "❌ 警告: 未找到 defconfig 蓝本文件！"
        fi
        echo "======================================================="
-
