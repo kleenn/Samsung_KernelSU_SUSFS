@@ -25,11 +25,9 @@ runs:
       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
       echo "🚀 [阶段 1] 部署 SukiSU-Ultra 官方主线引擎..."
-      # 🧹【物理清创】：彻底铲除原仓库遗留的旧版 KSU 尸体
       rm -rf "$KERNEL_SRC/drivers/kernelsu"
       rm -rf "$KERNEL_SRC/KernelSU"
       
-      # 👑【造物主归位】：使用官方正牌的 SukiSU-Ultra 链接！
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin)
       if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
@@ -47,7 +45,7 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区 (awk 绝对防弹版)
+      # 🚨 SUSFS 冲突精准搭桥区 (适配 SukiSU-Ultra 的 3 参数远古框架)
       # =========================================================
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
@@ -68,9 +66,12 @@ runs:
       fi
 
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
-          echo "   🩹 精准修复 fs/read_write.c..."
-          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif' "$KERNEL_SRC/fs/read_write.c"
-          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
+          echo "   🩹 精准修复 fs/read_write.c (使用 SukiSU 兼容的 3 参数钩子)..."
+          # 注入 3 参数 extern 声明和对应的布尔变量开关，完全匹配 ksud.c 的定义！
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_vfs_read_hook;\nextern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
+          
+          # 注入 3 参数的实体调用，舍弃 Static Key 逻辑
+          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (unlikely(ksu_vfs_read_hook))\n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
           rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
@@ -213,18 +214,14 @@ runs:
        echo -e "\n[2] 检查 Kconfig 搭桥结果 (尾部是否成功注入):"
        tail -n 20 "$KERNEL_SRC/drivers/block/zram/Kconfig" || echo "❌ 警告: 未找到 Kconfig"
        
-       echo -e "\n[3] 检查 SukiSU-Ultra 引擎核心 (hook.c):"
-       HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
-       if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_is_init_rc_hook_enabled" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
-       
-       echo -e "\n[4] 检查 SukiSU-Ultra 运行时核心 (ksud.c):"
+       echo -e "\n[3] 检查 SukiSU-Ultra 运行时核心 (ksud.c):"
        KSUD_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "ksud.c" | head -n 1)
        if [ -n "$KSUD_C" ]; then echo "✅ 截获文件: $KSUD_C"; else echo "❌ 未发现 SukiSU-Ultra ksud.c"; fi
 
-       echo -e "\n[5] 检查核心拦截点 (fs/read_write.c):"
+       echo -e "\n[4] 检查核心拦截点 (fs/read_write.c):"
        grep -B 2 -A 8 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
        
-       echo -e "\n[6] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
+       echo -e "\n[5] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
        TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
        if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
        CHECK_CONF=$(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) | head -n 1)
