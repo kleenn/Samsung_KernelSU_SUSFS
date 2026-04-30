@@ -1,5 +1,5 @@
 name: build kernel
-description: Execute build with full param matrix and Git Shield protection
+description: Pure compilation router
 inputs:
  branch:
   description: 'device kernel'
@@ -12,68 +12,9 @@ runs:
     shell: bash
     run: |
      set -e
-     export IGNORE_DEFCONFIG_ERRORS=1
      cd "$CONFIG"
-     
-     KERNEL_SRC=""
-     for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
-       if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
-     done
-     [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
-     echo "🚀 [恢复关键步骤] 部署满血参数矩阵 (包含被遗漏的网络优化代理配置)..."
-     ALL_FLAGS=(
-         # --- KSU 核心 ---
-         "CONFIG_KSU=y" "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
-         "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
-         "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
-         "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
-         "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
-         "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
-         "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
-         "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
-         # --- ZRAM & Crypto ---
-         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y" "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
-         "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
-         "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
-         "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
-         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-         # --- Network TPROXY & IP_SET (被找回的核心代理模块) ---
-         "CONFIG_BPF_STREAM_PARSER=y" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "CONFIG_NETFILTER_XT_SET=y"
-         "CONFIG_IP_SET=y" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP=y" "CONFIG_IP_SET_BITMAP_IPMAC=y"
-         "CONFIG_IP_SET_BITMAP_PORT=y" "CONFIG_IP_SET_HASH_IP=y" "CONFIG_IP_SET_HASH_IPMARK=y" "CONFIG_IP_SET_HASH_IPPORT=y"
-         "CONFIG_IP_SET_HASH_IPPORTIP=y" "CONFIG_IP_SET_HASH_IPPORTNET=y" "CONFIG_IP_SET_HASH_IPMAC=y" "CONFIG_IP_SET_HASH_MAC=y"
-         "CONFIG_IP_SET_HASH_NETPORTNET=y" "CONFIG_IP_SET_HASH_NET=y" "CONFIG_IP_SET_HASH_NETNET=y" "CONFIG_IP_SET_HASH_NETPORT=y"
-         "CONFIG_IP_SET_HASH_NETIFACE=y" "CONFIG_IP_SET_LIST_SET=y" "CONFIG_IP6_NF_NAT=y" "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
-         "CONFIG_NETFILTER=y" "CONFIG_NETFILTER_ADVANCED=y" "CONFIG_NETFILTER_XTABLES=y" "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
-         "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" "CONFIG_NETFILTER_XT_MATCH_MARK=y" "CONFIG_NETFILTER_XT_TARGET_MARK=y" "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
-     )
-
-     TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
-     if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
-
-     for defconfig in $(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
-         for flag in "${ALL_FLAGS[@]}"; do
-             key=$(echo "$flag" | cut -d'=' -f1)
-             sed -i "/^$key=/d; /^# $key is not set/d" "$defconfig"
-             echo "$flag" >> "$defconfig"
-         done
-     done
-
-     # --- 🛡️ 终极 Git 护盾 (防止任何定制补丁被底层清理脚本清除) ---
-     if [[ "${{ inputs.branch }}" == "SM8450-Kleenn-S22" ]]; then
-       echo "🛡️ 开启终极 Git 护盾，锁定 BBG/BBR/NTSync/SUSFS 等所有补丁..."
-       (
-         cd "$KERNEL_SRC"
-         git config --global user.email "bot@actions.com"
-         git config --global user.name "ActionsBot"
-         git add -A
-         git commit -m "Shield: Locked all modular patches" || echo "No changes to commit"
-       )
-     fi
-     # -------------------------------------------------
-
-     echo "🚀 开始内核原生编译..."
+     echo "🚀 [终极阶段] 护盾已在上一阶段锁死，现在移交控制权，开始内核原生编译..."
      
      if [[ "${{ inputs.branch }}" == "SM8450-Kleenn-S22" ]]; then
        echo ">>> 执行 SM8450 专属定制源打包脚本..."
