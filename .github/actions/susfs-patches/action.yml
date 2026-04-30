@@ -31,30 +31,33 @@ runs:
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin)
       if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
-      # 👑【白盒终极补天手术】：暴力修正 SukiSU 原生缺陷
-      KSUD_TARGET=$(find "$KERNEL_SRC/KernelSU" -type f \( -name "ksud.c" -o -name "ksud_integration.c" \) | head -n 1)
-      if [ -n "$KSUD_TARGET" ]; then
-          echo "   🩹 强行补齐缺失的 Static Keys 并统一函数签名..."
-          
-          # 1. 强行把 3 参数的旧定义替换为 1 参数的现代定义，完美对齐 SUSFS
-          sed -i 's/void ksu_handle_sys_read(unsigned int fd, char __user \*\*buf_ptr, size_t \*count_ptr)/void ksu_handle_sys_read(unsigned int fd)/g' "$KSUD_TARGET"
-          sed -i 's/int ksu_handle_sys_read(unsigned int fd, char __user \*\*buf_ptr, size_t \*count_ptr)/int ksu_handle_sys_read(unsigned int fd)/g' "$KSUD_TARGET"
+      # 👑【白盒终极补天手术】：自建独立 C 文件，强行补齐两组割裂的 Static Keys (修复 YAML 缩进)
+      echo "   🩹 创建独立的 susfs_keys.c 模块并写入物理变量..."
+      cat << 'EOF' > "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      #include <linux/static_key.h>
+      #include <linux/export.h>
 
-          # 2. 强行在尾部焊死 4 个静态键实体
-          cat << 'EOF' >> "$KSUD_TARGET"
+      #ifdef CONFIG_KSU_SUSFS
 
-/* --- INJECTED BY SUSFS ACTION TO FIX STATIC KEYS --- */
-#include <linux/static_key.h>
-struct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;
-EXPORT_SYMBOL(ksu_is_init_rc_hook_enabled);
-struct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;
-EXPORT_SYMBOL(ksu_is_input_hook_enabled);
-struct static_key_false ksu_input_hook_key_false = STATIC_KEY_FALSE_INIT;
-EXPORT_SYMBOL(ksu_input_hook_key_false);
-struct static_key_false ksu_init_rc_hook_key_false = STATIC_KEY_FALSE_INIT;
-EXPORT_SYMBOL(ksu_init_rc_hook_key_false);
-EOF
-      fi
+      /* 给 VFS 挂载点（input.c / read_write.c）使用的 TRUE 组 */
+      DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
+      EXPORT_SYMBOL(ksu_is_init_rc_hook_enabled);
+
+      DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
+      EXPORT_SYMBOL(ksu_is_input_hook_enabled);
+
+      /* 给 SukiSU 内部（ksud.c）使用的 FALSE 组 */
+      DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);
+      EXPORT_SYMBOL(ksu_input_hook_key_false);
+
+      DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
+      EXPORT_SYMBOL(ksu_init_rc_hook_key_false);
+
+      #endif
+      EOF
+      
+      # 将我们自建的补天模块强行插入编译序列！
+      echo "kernelsu-objs += susfs_keys.o" >> "$KERNEL_SRC/KernelSU/kernel/Kbuild"
 
       echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
@@ -70,7 +73,7 @@ EOF
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区
+      # 🚨 SUSFS 冲突精准搭桥区 (严丝合缝对齐 SukiSU 原生框架)
       # =========================================================
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
@@ -91,10 +94,10 @@ EOF
       fi
 
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
-          echo "   🩹 精准修复 fs/read_write.c (使用现代 1 参数 Static Key)..."
-          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif' "$KERNEL_SRC/fs/read_write.c"
+          echo "   🩹 精准修复 fs/read_write.c (恢复 Static Key 并严格传递 3 参数)..."
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
           
-          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
+          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
           rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
@@ -253,4 +256,7 @@ EOF
        else
            echo "❌ 警告: 未找到 defconfig 蓝本文件！"
        fi
+       
+       echo -e "\n[6] 检查白盒补天模块 (susfs_keys.c):"
+       if [ -f "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c" ]; then echo "✅ 补天模块物理落盘成功！"; else echo "❌ 警告: 未发现 susfs_keys.c"; fi
        echo "======================================================="
