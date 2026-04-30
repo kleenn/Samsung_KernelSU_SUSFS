@@ -13,15 +13,8 @@ runs:
      run: |
        cd "$COMMON"
        echo "🚀 开始部署成熟仓库: SukiSU-Ultra..."
-       
        curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
-       
-       if [ -d "KernelSU" ]; then
-           echo "✅ SukiSU-Ultra 部署成功！"
-       else
-           echo "❌ SukiSU-Ultra 部署失败！请检查网络或分支状态。"
-           exit 1
-       fi
+       if [ -d "KernelSU" ]; then echo "✅ SukiSU-Ultra 部署成功！"; else exit 1; fi
 
    - name: Apply SUSFS VFS Patch (Pure Mode)
      shell: bash
@@ -39,18 +32,15 @@ runs:
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c || true
           
       patch -p1 < susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
-      
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c || true
-
       grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
       
-   - name: Apply and Audit ZRAM Patches (STRICT MODE)
+   - name: Apply and Audit ZRAM Patches (SURGICAL STRIKE)
      shell: bash
      run: |
       cd "$COMMON"
       echo "🚀 开始拉取并严密审计 ZRAM 神级补丁..."
       
-      # 【致命修复】：将之前被删掉的补丁仓库重新克隆回来！
       rm -rf $GITHUB_WORKSPACE/SukiSU_patch_tmp
       git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
 
@@ -63,20 +53,40 @@ runs:
       cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ 
       cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ 
 
-      echo ">>> 正在应用 lz4kd.patch..."
-      if ! patch -p1 -F 3 < lz4kd.patch; then
-          echo "❌ lz4kd.patch 应用失败！正在收集冲突证据 (.rej 文件)..."
-          find . -name "*.rej" -type f -exec echo -e "\n--- 内容: {} ---" \; -exec cat {} \;
-          echo "💥 证据收集完毕，立即熔断流水线以供仙分析。"
-          exit 1
-      fi
+      echo ">>> 🔪 外科手术：从补丁中动态切除导致冲突的 Kconfig 部分..."
+      awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4kd.patch > lz4kd_clean.patch
+      awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4k_oplus.patch > lz4k_oplus_clean.patch
+
+      echo ">>> 应用清理后的 lz4kd 补丁..."
+      if ! patch -p1 -F 3 < lz4kd_clean.patch; then echo "❌ 补丁失败"; exit 1; fi
       
-      echo ">>> 正在应用 lz4k_oplus.patch..."
-      if ! patch -p1 -F 3 < lz4k_oplus.patch; then
-          echo "❌ lz4k_oplus.patch 应用失败！正在收集冲突证据 (.rej 文件)..."
-          find . -name "*.rej" -type f -exec echo -e "\n--- 内容: {} ---" \; -exec cat {} \;
-          echo "💥 证据收集完毕，立即熔断流水线以供仙分析。"
-          exit 1
-      fi
+      echo ">>> 应用清理后的 lz4k_oplus 补丁..."
+      if ! patch -p1 -F 3 < lz4k_oplus_clean.patch; then echo "❌ 补丁失败"; exit 1; fi
       
-      echo "✅ 所有 ZRAM 补丁完美贴合，未产生任何冲突！"
+      echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
+      cat << 'EOF' >> drivers/block/zram/Kconfig
+
+      # --- INJECTED BY SUKISU ACTION ---
+      config ZRAM_DEF_COMP_LZ4KD
+          bool "lz4kd"
+          depends on ZRAM
+
+      config ZRAM_DEF_COMP_LZ4K_OPLUS
+          bool "lz4k_oplus"
+          depends on ZRAM
+
+      config ZRAM_DEF_COMP
+          string
+          default "lz4kd" if ZRAM_DEF_COMP_LZ4KD
+          default "lz4k_oplus" if ZRAM_DEF_COMP_LZ4K_OPLUS
+          default "lzo-rle"
+      EOF
+      
+      echo "=========================================================="
+      echo "   🔎 核心落盘即时验证 (阶段一：补丁应用后)"
+      echo "=========================================================="
+      echo -e "\n--- [验证 A] drivers/block/zram/zcomp.c (前 30 行) ---"
+      head -n 30 drivers/block/zram/zcomp.c
+      echo -e "\n--- [验证 B] drivers/block/zram/Kconfig (末尾 20 行) ---"
+      tail -n 20 drivers/block/zram/Kconfig
+      echo "=========================================================="
