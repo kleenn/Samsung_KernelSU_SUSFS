@@ -107,10 +107,6 @@ jobs:
             rm "$file"
           done
 
-      - name: Add KernelSU-Next
-        if: inputs.ksun == 'true'
-        uses: ./.github/actions/ksun
-
       - name: Apply zeromount Patches
         if: inputs.susfs == 'true' && inputs.zeromount == 'true'
         uses: ./.github/actions/zeromount
