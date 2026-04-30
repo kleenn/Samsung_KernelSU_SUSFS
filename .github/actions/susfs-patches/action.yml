@@ -70,11 +70,9 @@ runs:
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
           echo "   🩹 精准修复 fs/read_write.c..."
           # 插入 extern 声明到 SYSCALL_DEFINE3(read) 上方
-          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif\n' "$KERNEL_SRC/fs/read_write.c"
-          # 将钩子精准插在 return ksys_read 的上方
-          sed -i '/SYSCALL_DEFINE3(read,/,/return ksys_read/ { /return ksys_read/i \
-#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif
-          }' "$KERNEL_SRC/fs/read_write.c"
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif' "$KERNEL_SRC/fs/read_write.c"
+          # 【YAML修复点】：使用单行 awk 安全插入代码块，绝不破坏缩进
+          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
           rm "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
