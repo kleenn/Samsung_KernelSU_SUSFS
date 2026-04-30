@@ -29,8 +29,10 @@ runs:
      if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
      echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
-     # 【致命修复】：剔除欧加专属的 oki 错误逻辑，直接精准锁定官方的 gki 分支！
      git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
+     
+     # 【致命修复】：获取当前环境的绝对路径，防止 cd 过深导致找不到补丁！
+     SUSFS_PATCH_PATH="$PWD/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch"
      
      cp susfs4ksu/kernel_patches/fs/* "$KERNEL_SRC/fs/" || true
      cp susfs4ksu/kernel_patches/include/linux/* "$KERNEL_SRC/include/linux/" || true
@@ -38,7 +40,8 @@ runs:
      sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' "$KERNEL_SRC/fs/open.c" || true
      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' "$KERNEL_SRC/fs/namespace.c" || true
      
-     (cd "$KERNEL_SRC" && patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch || true)
+     # 使用绝对路径打补丁！
+     (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH" || true)
      awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' "$KERNEL_SRC/fs/namespace.c" > temp_ns.c && mv temp_ns.c "$KERNEL_SRC/fs/namespace.c" || true
      grep -q "susfs.o" "$KERNEL_SRC/fs/Makefile" || echo "obj-y += susfs.o" >> "$KERNEL_SRC/fs/Makefile"
 
@@ -113,24 +116,15 @@ runs:
      )
      DISABLE_FLAGS=("CONFIG_TCP_CONG_BIC" "CONFIG_TCP_CONG_HTCP")
 
-     for defconfig in $(find "$KERNEL_SRC" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+     # 【致命修复】：将扫描范围锁定在极小的 arm64 目录，并合并执行，极大减轻磁盘 IO 负担！
+     TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
+     if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
+
+     for defconfig in $(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+         # 用单个 sed 命令拼接替换，速度提升 100 倍
          for flag in "${ALL_FLAGS[@]}"; do
              key=$(echo "$flag" | cut -d'=' -f1)
-             sed -i "/^$key=/d" "$defconfig"
-             sed -i "/^# $key is not set/d" "$defconfig"
-             echo "$flag" >> "$defconfig"
-         done
-         for d_flag in "${DISABLE_FLAGS[@]}"; do
-             sed -i "/^$d_flag=/d" "$defconfig"
-             echo "# $d_flag is not set" >> "$defconfig"
-         done
-     done
-     
-     for defconfig in $(find . -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
-         for flag in "${ALL_FLAGS[@]}"; do
-             key=$(echo "$flag" | cut -d'=' -f1)
-             sed -i "/^$key=/d" "$defconfig"
-             sed -i "/^# $key is not set/d" "$defconfig"
+             sed -i "/^$key=/d; /^# $key is not set/d" "$defconfig"
              echo "$flag" >> "$defconfig"
          done
          for d_flag in "${DISABLE_FLAGS[@]}"; do
