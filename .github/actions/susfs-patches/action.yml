@@ -24,18 +24,17 @@ runs:
       done
       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
-      echo "🚀 [阶段 1] 部署 SukiSU-Ultra 引擎..."
+      echo "🚀 [阶段 1] 部署 SukiSU-Ultra 官方主线引擎..."
       # 🧹【物理清创】：彻底铲除原仓库遗留的旧版 KSU 尸体
       rm -rf "$KERNEL_SRC/drivers/kernelsu"
       rm -rf "$KERNEL_SRC/KernelSU"
       
-      (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin)
+      # 👑【造物主归位】：使用官方正牌的 SukiSU-Ultra 链接！
+      (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin)
       if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
       echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
-      
-      # (删除了画蛇添足的 SukiSU 内部补丁操作，保持引擎纯净)
 
       SUSFS_PATCH_PATH="$PWD/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch"
       cp susfs4ksu/kernel_patches/fs/* "$KERNEL_SRC/fs/" || true
@@ -216,7 +215,7 @@ runs:
        
        echo -e "\n[3] 检查 SukiSU-Ultra 引擎核心 (hook.c):"
        HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
-       if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_handle_sys_read" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
+       if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_is_init_rc_hook_enabled" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
        
        echo -e "\n[4] 检查 SukiSU-Ultra 运行时核心 (ksud.c):"
        KSUD_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "ksud.c" | head -n 1)
