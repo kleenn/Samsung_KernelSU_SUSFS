@@ -13,7 +13,10 @@ runs:
     run: |
      cd "$CONFIG"
 
-     if [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit5" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
+     # 在 cd "$CONFIG" 下方添加：
+     if [[ "$CONFIG" == *"SM8450-Kleenn-S22"* || "$CONFIG" == *"SM-S901E-Oneui8"* || "$CONFIG" == *"SM-X800-Oneui8"* ]]; then
+  cp ./out/msm-waipio-waipio-gki/dist/Image "$ANYKERNEL3/Image"
+     elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui7" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit4" || "${{ inputs.branch }}" == "SM-S928B-Oneui8-bit5" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" ]]; then
        cp ./kernel_platform/sec/dist/Image "$ANYKERNEL3/Image"
      elif [[ "${{ inputs.branch }}" == "SM-S928B-Oneui6.1" ]]; then
        cp ./out/msm-pineapple-pineapple-gki/dist/Image "$ANYKERNEL3/Image"
