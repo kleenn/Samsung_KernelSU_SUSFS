@@ -25,7 +25,7 @@ runs:
       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
       echo "🚀 [阶段 1] 部署 SukiSU-Ultra 引擎..."
-      # 🧹【物理清创】：彻底铲除原仓库遗留的旧版 KSU 尸体，防止软链接嵌套导致“借尸还魂”！
+      # 🧹【物理清创】：彻底铲除原仓库遗留的旧版 KSU 尸体
       rm -rf "$KERNEL_SRC/drivers/kernelsu"
       rm -rf "$KERNEL_SRC/KernelSU"
       
@@ -35,9 +35,7 @@ runs:
       echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
       
-      # 💉【内部补漏】：尝试将 SUSFS 的支持变量打入 SukiSU 内部（如果引擎未自带）
-      cp susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch "$KERNEL_SRC/KernelSU/" || true
-      (cd "$KERNEL_SRC/KernelSU" && patch -p1 --forward < 10_enable_susfs_for_ksu.patch || echo "⚠️ SukiSU 内部可能已自带 SUSFS 支持，自动放行。")
+      # (删除了画蛇添足的 SukiSU 内部补丁操作，保持引擎纯净)
 
       SUSFS_PATCH_PATH="$PWD/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch"
       cp susfs4ksu/kernel_patches/fs/* "$KERNEL_SRC/fs/" || true
@@ -216,7 +214,6 @@ runs:
        echo -e "\n[2] 检查 Kconfig 搭桥结果 (尾部是否成功注入):"
        tail -n 20 "$KERNEL_SRC/drivers/block/zram/Kconfig" || echo "❌ 警告: 未找到 Kconfig"
        
-       # 【更新法医指针】：匹配现代 KernelSU-Next / SukiSU-Ultra 架构
        echo -e "\n[3] 检查 SukiSU-Ultra 引擎核心 (hook.c):"
        HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
        if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_handle_sys_read" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
