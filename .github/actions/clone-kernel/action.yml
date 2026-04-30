@@ -12,4 +12,12 @@ runs:
    - name: Clone Kernel Source
      shell: bash
      run: |
-      git clone --depth 1 -b ${{ inputs.branch }} --single-branch https://github.com/WildKernels/Samsung_Kernels.git $CONFIG
+      # 逻辑分流：当遇到我们的专属新设备时，切换拉取源和策略
+      if [[ "${{ inputs.branch }}" == "SM8450-Kleenn-S22" ]]; then
+        echo "🚀 检测到定制设备，正在从专属 Fork 源拉取源码及子模块..."
+        # 【请将这里的 YOUR_GITHUB_NAME 替换为你自己的 GitHub 用户名！】
+        git clone --depth 1 --recurse-submodules https://github.com/YOUR_GITHUB_NAME/android_kernel_samsung_sm8450_s22.git $CONFIG
+      else
+        echo "📥 正在从 WildKernels 拉取常规源码..."
+        git clone --depth 1 -b ${{ inputs.branch }} --single-branch https://github.com/WildKernels/Samsung_Kernels.git $CONFIG
+      fi
