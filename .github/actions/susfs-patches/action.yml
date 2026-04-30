@@ -25,15 +25,19 @@ runs:
       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
       echo "🚀 [阶段 1] 部署 SukiSU-Ultra 官方主线引擎..."
+      # 🧹【物理清创】：彻底铲除原仓库遗留的旧版 KSU 尸体
       rm -rf "$KERNEL_SRC/drivers/kernelsu"
       rm -rf "$KERNEL_SRC/KernelSU"
       
+      # 拉取官方最新 SukiSU-Ultra 主线
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin)
       if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
       echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
 
+      # 【绝杀防线】：坚决不打 10_enable_susfs 补丁！SukiSU-Ultra 原生不需要它！
+      
       SUSFS_PATCH_PATH="$PWD/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch"
       cp susfs4ksu/kernel_patches/fs/* "$KERNEL_SRC/fs/" || true
       cp susfs4ksu/kernel_patches/include/linux/* "$KERNEL_SRC/include/linux/" || true
@@ -45,7 +49,7 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区 (适配 SukiSU-Ultra 的 3 参数远古框架)
+      # 🚨 SUSFS 冲突精准搭桥区 (适配 SukiSU-Ultra 原生 3参数形态)
       # =========================================================
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
@@ -66,11 +70,11 @@ runs:
       fi
 
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
-          echo "   🩹 精准修复 fs/read_write.c (使用 SukiSU 兼容的 3 参数钩子)..."
-          # 注入 3 参数 extern 声明和对应的布尔变量开关，完全匹配 ksud.c 的定义！
-          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_vfs_read_hook;\nextern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
+          echo "   🩹 精准修复 fs/read_write.c (回退至最防弹的 SukiSU 3参数挂载)..."
+          # 核心修复点：不使用任何 Static Key，直接声明 bool 变量和原生 3 参数挂载点
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_vfs_read_hook;\nextern void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
           
-          # 注入 3 参数的实体调用，舍弃 Static Key 逻辑
+          # 核心修复点：使用 if (unlikely(ksu_vfs_read_hook)) 进行拦截
           awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (unlikely(ksu_vfs_read_hook))\n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
           rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
