@@ -191,13 +191,12 @@ jobs:
           echo "          === 终极法医鉴定：核心特性落盘全量核验 ==="
           echo "======================================================="
           cd $GITHUB_WORKSPACE
-          
-          # 寻找真实的内核源码根目录以防路径偏移
-          KERNEL_SRC=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1 | sed 's|/drivers/block/zram/zcomp.c||')
-          if [ -z "$KERNEL_SRC" ]; then KERNEL_SRC="."; fi
+
+          KERNEL_SRC="$GITHUB_WORKSPACE/$CONFIG/kernel_platform/common"
           
           echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
-          CONFIG_FILE=$(find . -name ".config" -type f | grep "common" | head -n 1) || true
+          CONFIG_FILE="$KERNEL_SRC/arch/arm64/configs/gki_defconfig" # 改为查验我们修改的蓝本
+          
           if [ -f "$CONFIG_FILE" ]; then
             echo "✅ 截获文件: $CONFIG_FILE"
             grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
