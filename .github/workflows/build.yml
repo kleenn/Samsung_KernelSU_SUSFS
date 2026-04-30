@@ -170,6 +170,14 @@ jobs:
          branch: ${{ inputs.branch }}
          android_version: ${{ inputs.android_version }}
          kernel_version: ${{ inputs.kernel_version }}
+     
+      - name: Apply SUSFS Patches
+        if: inputs.susfs == 'true'
+        uses: ./.github/actions/susfs-patches
+        with:
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
+          branch: ${{ inputs.branch }}
 
       - name: Build
         uses: ./.github/actions/build
