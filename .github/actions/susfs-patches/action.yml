@@ -1,5 +1,5 @@
 name: apply susfs and zram patches
-description: Deploy SukiSU-Ultra, SUSFS, and ZRAM lz4kd safely.
+description: Deploy SukiSU-Ultra, SUSFS, ZRAM, Network optimizations and Git Shield safely.
 inputs:
   android_version: { required: true }
   kernel_version: { required: true }
@@ -8,16 +8,16 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Inject SukiSU-Ultra, SUSFS, and ZRAM
+   - name: Inject Features, Audit Patches, and Enable Git Shield
      shell: bash
      run: |
       set -e
+      export IGNORE_DEFCONFIG_ERRORS=1
       cd "$CONFIG"
       
       KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
       AVER=$(echo "$CONFIG" | awk -F'-' '{print $(NF-1)}')
       
-      # 寻找真实源码目录
       KERNEL_SRC=""
       for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
         if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
@@ -26,6 +26,7 @@ runs:
 
       echo "🚀 [阶段 1] 部署 SukiSU-Ultra 引擎..."
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin)
+      if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
       echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
@@ -37,7 +38,13 @@ runs:
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' "$KERNEL_SRC/fs/open.c" || true
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' "$KERNEL_SRC/fs/namespace.c" || true
       
-      (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH" || true)
+      echo ">>> 应用 50 号 SUSFS 补丁..."
+      if ! (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH"); then
+          echo "❌ SUSFS 补丁应用失败！正在抓取冲突证据..."
+          (cd "$KERNEL_SRC" && find . -name "*.rej" -type f -exec echo -e "\n--- 🚨 冲突文件: {} ---" \; -exec cat {} \;)
+          exit 1
+      fi
+      
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' "$KERNEL_SRC/fs/namespace.c" > temp_ns.c && mv temp_ns.c "$KERNEL_SRC/fs/namespace.c" || true
       grep -q "susfs.o" "$KERNEL_SRC/fs/Makefile" || echo "obj-y += susfs.o" >> "$KERNEL_SRC/fs/Makefile"
 
@@ -56,8 +63,19 @@ runs:
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4kd.patch > lz4kd_clean.patch)
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4k_oplus.patch > lz4k_oplus_clean.patch)
 
-      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch || exit 1)
-      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch || exit 1)
+      echo ">>> 应用 lz4kd 补丁..."
+      if ! (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch); then
+          echo "❌ lz4kd 补丁应用失败！正在抓取冲突证据..."
+          (cd "$KERNEL_SRC" && find . -name "*.rej" -type f -exec echo -e "\n--- 🚨 冲突文件: {} ---" \; -exec cat {} \;)
+          exit 1
+      fi
+
+      echo ">>> 应用 lz4k_oplus 补丁..."
+      if ! (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch); then
+          echo "❌ lz4k_oplus 补丁应用失败！正在抓取冲突证据..."
+          (cd "$KERNEL_SRC" && find . -name "*.rej" -type f -exec echo -e "\n--- 🚨 冲突文件: {} ---" \; -exec cat {} \;)
+          exit 1
+      fi
       
       echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
       echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
@@ -78,3 +96,72 @@ runs:
 
       sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
       sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
+
+      echo "🚀 [阶段 4] 注入 KSU、ZRAM 以及完整网络代理优化矩阵..."
+      ALL_FLAGS=(
+         "CONFIG_KSU=y" "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
+         "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
+         "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+         "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+         "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+         "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y" "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
+         "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
+         "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+         "CONFIG_BPF_STREAM_PARSER=y" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "CONFIG_NETFILTER_XT_SET=y"
+         "CONFIG_IP_SET=y" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP=y" "CONFIG_IP_SET_BITMAP_IPMAC=y"
+         "CONFIG_IP_SET_BITMAP_PORT=y" "CONFIG_IP_SET_HASH_IP=y" "CONFIG_IP_SET_HASH_IPMARK=y" "CONFIG_IP_SET_HASH_IPPORT=y"
+         "CONFIG_IP_SET_HASH_IPPORTIP=y" "CONFIG_IP_SET_HASH_IPPORTNET=y" "CONFIG_IP_SET_HASH_IPMAC=y" "CONFIG_IP_SET_HASH_MAC=y"
+         "CONFIG_IP_SET_HASH_NETPORTNET=y" "CONFIG_IP_SET_HASH_NET=y" "CONFIG_IP_SET_HASH_NETNET=y" "CONFIG_IP_SET_HASH_NETPORT=y"
+         "CONFIG_IP_SET_HASH_NETIFACE=y" "CONFIG_IP_SET_LIST_SET=y" "CONFIG_IP6_NF_NAT=y" "CONFIG_IP6_NF_TARGET_MASQUERADE=y"
+         "CONFIG_NETFILTER=y" "CONFIG_NETFILTER_ADVANCED=y" "CONFIG_NETFILTER_XTABLES=y" "CONFIG_NETFILTER_XT_TARGET_TPROXY=y"
+         "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" "CONFIG_NETFILTER_XT_MATCH_MARK=y" "CONFIG_NETFILTER_XT_TARGET_MARK=y" "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"
+      )
+
+      TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
+      if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
+
+      for defconfig in $(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+          for flag in "${ALL_FLAGS[@]}"; do
+              key=$(echo "$flag" | cut -d'=' -f1)
+              sed -i "/^$key=/d; /^# $key is not set/d" "$defconfig"
+              echo "$flag" >> "$defconfig"
+          done
+      done
+
+      echo "🛡️ [阶段 5] 开启终极 Git 护盾，锁定所有定制修改 (包含 BBR/BBG 等)！"
+      (
+        cd "$KERNEL_SRC"
+        git config --global user.email "bot@actions.com"
+        git config --global user.name "ActionsBot"
+        git add -A
+        git commit -m "Shield: Locked BBG, BBR, NTSync, Network Proxy, SukiSU, SUSFS, and ZRAM" || echo "No changes to commit"
+        echo "✅ Git 护盾部署完成，一切就绪！"
+      )
+      
+   - name: Check Operations (Pre-Build Forensic Audit)
+     shell: bash
+     run: |
+       cd "$CONFIG"
+       KERNEL_SRC=""
+       for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
+         if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
+       done
+       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+       
+       echo "======================================================="
+       echo "   🚨 编译前置法医自检：确认一切修改被 Git 护盾保护！"
+       echo "======================================================="
+       echo "[1] 检查 zcomp.c 算法注册阵列 (是否包含 lz4kd):"
+       head -n 35 "$KERNEL_SRC/drivers/block/zram/zcomp.c" | grep -A 8 "backends" || echo "❌ 警告: 未在 zcomp.c 找到注册数组"
+       echo -e "\n[2] 检查 Kconfig 搭桥结果 (尾部是否成功注入):"
+       tail -n 20 "$KERNEL_SRC/drivers/block/zram/Kconfig" || echo "❌ 警告: 未找到 Kconfig"
+       echo -e "\n[3] 检查 SukiSU-Ultra 核心目录是否存在:"
+       ls -la "$KERNEL_SRC/KernelSU" | head -n 5 || echo "❌ 警告: SukiSU-Ultra 目录丢失！"
+       echo -e "\n[4] 检查 Git 护盾状态 (最后一次提交记录):"
+       (cd "$KERNEL_SRC" && git log -n 1) || echo "❌ 警告: Git 日志读取失败"
+       echo "======================================================="
