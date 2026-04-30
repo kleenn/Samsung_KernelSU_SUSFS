@@ -220,14 +220,26 @@ jobs:
             echo "❌ 未发现 Kconfig"
           fi
           
-          echo -e "\n[3] 检查 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
-          # 【核心动态寻址】：无视底层目录重构，直接让 find 全局搜索！
-          INIT_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "init.c" | head -n 1)
-          if [ -n "$INIT_C" ]; then echo "✅ 截获文件: $INIT_C"; tail -n 15 "$INIT_C"; else echo "❌ 未发现 SukiSU-Ultra init.c"; fi
+          echo -e "\n[3] 检查 SukiSU-Ultra 引擎核心 (hook.c):"
+       HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
+          if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_is_init_rc_hook_enabled" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
        
-          echo -e "\n[4] 检查 SukiSU-Ultra IOCTL 隧道 (dispatch.c / supercall.c):"
-          DISPATCH_C=$(find "$KERNEL_SRC/KernelSU" -type f \( -name "dispatch.c" -o -name "supercall.c" \) | head -n 1)
-          if [ -n "$DISPATCH_C" ]; then echo "✅ 截获文件: $DISPATCH_C"; grep -A 10 "ksu_supercall_handle_ioctl" "$DISPATCH_C" || true; else echo "❌ 未发现 SukiSU-Ultra 隧道核心文件"; fi
+          echo -e "\n[4] 检查 SukiSU-Ultra 运行时核心 (ksud.c):"
+          KSUD_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "ksud.c" | head -n 1)
+          if [ -n "$KSUD_C" ]; then echo "✅ 截获文件: $KSUD_C"; else echo "❌ 未发现 SukiSU-Ultra ksud.c"; fi
+
+          echo -e "\n[5] 检查核心拦截点 (fs/read_write.c):"
+          grep -B 2 -A 8 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
+       
+          echo -e "\n[6] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
+          TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
+          if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
+          CHECK_CONF=$(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) | head -n 1)
+          if [ -n "$CHECK_CONF" ]; then
+           grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CHECK_CONF" || echo "❌ 警告: 关键参数未注入 defconfig 蓝本！"
+          else
+              echo "❌ 警告: 未找到 defconfig 蓝本文件！"
+          fi
           echo "======================================================="
           
       - name: Prepare AnyKernel3
