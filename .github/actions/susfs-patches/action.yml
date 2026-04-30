@@ -207,20 +207,24 @@ runs:
        echo "======================================================="
        echo "   🚨 编译前置法医自检：确认一切修改被 Git 护盾保护！"
        echo "======================================================="
+       
        echo "[1] 检查 zcomp.c 算法注册阵列 (是否包含 lz4kd):"
-       head -n 45 "$KERNEL_SRC/drivers/block/zram/zcomp.c" | grep -A 8 "backends" || echo "❌ 警告: 未在 zcomp.c 找到注册数组"
+       # 【修改点】：向下打印 25 行，确保看全整个 backends 数组
+       head -n 50 "$KERNEL_SRC/drivers/block/zram/zcomp.c" | grep -A 25 "backends" || echo "❌ 警告: 未在 zcomp.c 找到注册数组"
        
        echo -e "\n[2] 检查 Kconfig 搭桥结果 (尾部是否成功注入):"
        tail -n 20 "$KERNEL_SRC/drivers/block/zram/Kconfig" || echo "❌ 警告: 未找到 Kconfig"
        
-       echo -e "\n[3] 检查 SukiSU-Ultra 核心目录是否存在:"
-       ls -la "$KERNEL_SRC/KernelSU" | head -n 5 || echo "❌ 警告: SukiSU-Ultra 目录丢失！"
+       echo -e "\n[3] 检查 SukiSU-Ultra 核心目录 (排除隐藏文件干扰):"
+       # 【修改点】：改用 ls -l，不看隐藏文件，直接看核心源码结构
+       ls -l "$KERNEL_SRC/KernelSU" | head -n 10 || echo "❌ 警告: SukiSU-Ultra 目录丢失！"
        
        echo -e "\n[4] 检查 Git 护盾状态 (最后一次提交记录):"
        (cd "$KERNEL_SRC" && git log -n 1) || echo "❌ 警告: Git 日志读取失败"
        
        echo -e "\n[5] 检查核心拦截点 (fs/read_write.c):"
-       grep -B 2 -A 8 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
+       # 【修改点】：扩大打印范围，确保看到 return ksys_read
+       grep -B 2 -A 15 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
        
        echo -e "\n[6] 检查 Defconfig 蓝本参数注入情况 (BBR/ZRAM/KSU):"
        TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
@@ -233,4 +237,3 @@ runs:
        fi
        echo "======================================================="
 
-       echo "======================================================="
