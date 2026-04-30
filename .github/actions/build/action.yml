@@ -1,5 +1,5 @@
 name: build kernel
-description: each samsung kernel has its own way of building the kernel, they are sorted here.
+description: Execute build with ultimate Git Shield protection
 inputs:
  branch:
   description: 'device kernel'
@@ -12,8 +12,57 @@ runs:
     shell: bash
     run: |
      set -e
+     export IGNORE_DEFCONFIG_ERRORS=1
      cd "$CONFIG"
      
+     KERNEL_SRC=""
+     for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
+       if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
+     done
+     [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
+
+     # --- 专门注入 KSU、SUSFS 和 ZRAM 的核心配置（不干涉 BBR/BBG 的配置） ---
+     ALL_FLAGS=(
+         "CONFIG_KSU=y" "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
+         "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
+         "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
+         "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+         "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+         "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+         "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
+         "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y" "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
+         "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
+         "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
+         "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
+     )
+
+     TARGET_CONF_DIR="$KERNEL_SRC/arch/arm64/configs"
+     if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
+
+     for defconfig in $(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) 2>/dev/null); do
+         for flag in "${ALL_FLAGS[@]}"; do
+             key=$(echo "$flag" | cut -d'=' -f1)
+             sed -i "/^$key=/d; /^# $key is not set/d" "$defconfig"
+             echo "$flag" >> "$defconfig"
+         done
+     done
+
+     # ====================================================================
+     # 🛡️ 终极物理护盾：将前面所有 Action (SUSFS, bbr, bbg, ntsync) 的修改永久锁死！
+     # 任何底层编译脚本的 git reset --hard 都将无法抹除我们的心血！
+     # ====================================================================
+     echo "🛡️ 开启终极 Git 护盾，保护所有模块化补丁不被重置..."
+     (
+       cd "$KERNEL_SRC"
+       git config --global user.email "bot@actions.com"
+       git config --global user.name "ActionsBot"
+       git add -A
+       git commit -m "Shield: Locked BBG, BBR, NTSync, SukiSU, SUSFS, and ZRAM" || echo "No changes to commit"
+       echo "✅ Git 护盾部署完成！"
+     )
+
      echo "🚀 [终极阶段] 移交控制权，开始内核原生编译..."
      if [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" || "${{ inputs.branch }}" == "SM-X710-Oneui6.1.1" ]]; then
        chmod +x build_kernel_GKI.sh
