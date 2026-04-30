@@ -1,5 +1,5 @@
 name: build kernel
-description: Pure compilation router
+description: Pure compilation router with OEM Trojan removal
 inputs:
  branch:
   description: 'device kernel'
@@ -17,6 +17,9 @@ runs:
      echo "🚀 [终极阶段] 护盾已在上一阶段锁死，现在移交控制权，开始内核原生编译..."
      
      if [[ "${{ inputs.branch }}" == "SM8450-Kleenn-S22" ]]; then
+       echo ">>> 🔪 物理阉割原作者的毒瘤脚本 (防止覆盖我们的 SukiSU-Ultra)..."
+       rm -f .github/scripts/ci.sh || true
+       
        echo ">>> 执行 SM8450 专属定制源打包脚本..."
        chmod +x ./build.sh
        ./build.sh ak3
