@@ -1,5 +1,5 @@
-name: apply susfs and zram patches (EVIDENCE MODE)
-description: Clean implementation of ReSukiSU and strict patch auditing
+name: apply susfs and zram patches (ULTRA EVIDENCE MODE)
+description: Clean implementation of SukiSU-Ultra and strict patch auditing
 inputs:
   android_version: { required: true }
   kernel_version: { required: true }
@@ -8,19 +8,19 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Deploy ReSukiSU (Replacing KSU-Next)
+   - name: Deploy SukiSU-Ultra (Official & Proven Logic)
      shell: bash
      run: |
        cd "$COMMON"
-       echo "🚀 开始部署成熟仓库: ReSukiSU..."
-       # 完全按照欧加脚本的成熟方案拉取 ReSukiSU
-       curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+       echo "🚀 开始部署成熟仓库: SukiSU-Ultra..."
        
-       # 验证目录是否成功生成
+       # 核心情报复刻：使用欧加脚本里成熟的官方地址和 builtin 参数！
+       curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+       
        if [ -d "KernelSU" ]; then
-           echo "✅ ReSukiSU 部署成功！"
+           echo "✅ SukiSU-Ultra 部署成功！"
        else
-           echo "❌ ReSukiSU 部署失败！"
+           echo "❌ SukiSU-Ultra 部署失败！请检查网络或分支状态。"
            exit 1
        fi
 
@@ -40,7 +40,7 @@ runs:
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c || true
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c || true
           
-      # 【核心】：只打 50 号补丁！因为 ReSukiSU 内部自带了 10 号补丁的逻辑！
+      # 【核心】：只打 50 号补丁！Ultra 内部自带了 KSU 端的 IOCTL 逻辑！
       patch -p1 < susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
       
       # 兼容三星的 namespace
@@ -64,7 +64,6 @@ runs:
       cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ 
 
       echo ">>> 正在应用 lz4kd.patch..."
-      # 尝试打补丁。如果任何一个 hunk 失败，立即触发错误处理块
       if ! patch -p1 -F 3 < lz4kd.patch; then
           echo "❌ lz4kd.patch 应用失败！正在收集冲突证据 (.rej 文件)..."
           find . -name "*.rej" -type f -exec echo -e "\n--- 内容: {} ---" \; -exec cat {} \;
