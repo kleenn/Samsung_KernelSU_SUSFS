@@ -1,51 +1,395 @@
-name: build kernel
-description: Pure compilation router
-inputs:
- branch:
-  description: 'device kernel'
-  required: true
+name: Kernel Build Process
+permissions:
+  contents: write
+  actions: write 
 
-runs:
- using: composite
- steps:
-  - name: start kernel build
-    shell: bash
-    run: |
-     set -e
-     cd "$CONFIG"
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      android_version:
+        required: true
+        type: string
+      kernel_version:
+        required: true
+        type: string
+      susfs:
+        required: true
+        type: string
+      bbg:
+        required: true
+        type: string
+      unicodefix:
+        required: true
+        type: string
+      zeromount:
+        required: true
+        type: string
+      ksun:
+        required: true
+        type: string
+      droidspace:
+        required: true
+        type: string
+      ntsync:
+        required: true
+        type: string
+      bbr:
+        required: true
+        type: string
 
-     echo "🚀 [终极阶段] 护盾已在上一阶段锁死，现在移交控制权，开始内核原生编译..."
+jobs:
+  build-samsung-gki:
+    if: inputs.branch == 'SM8450-Kleenn-S22' || inputs.branch == 'SM8450-Kleenn-S22'
+    name: "${{ inputs.branch }}-${{ inputs.kernel_version }}-${{ inputs.android_version }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+       
+      - name: Free Disk Space
+        if: true
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+          remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*"
+          remove_packages_one_command: true
+          remove_folders: "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell /usr/local/julia /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle"
+          rm_cmd: "rmz"
+          rmz_version: "3.1.1"
+          testing: false
+
+      - name: Setup more Swap (for LTO)
+        uses: thejerrybao/setup-swap-space@v1
+        with:
+          swap-size-gb: 25
+        
+      - name: Set CONFIG Environment Variable
+        run: |
+          CONFIG="${{ inputs.branch }}-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+          echo "CONFIG=$CONFIG" >> $GITHUB_ENV
+
+      - name: dependencies
+        uses: ./.github/actions/dependencies
+        with:
+          zeromount: ${{ inputs.zeromount }}
+          susfs: ${{ inputs.susfs }}
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
+          
+      - name: Download Kernel
+        uses: ./.github/actions/clone-kernel
+        with:
+          branch: ${{ inputs.branch }}
+            
+      - name: Set Path Environment Variables
+        uses: ./.github/actions/env-variables
+        with:
+         branch: ${{ inputs.branch }}
+         susfs: ${{ inputs.susfs }}
+         zeromount: ${{ inputs.zeromount }}
+          
+      - name: Extract all tar.xz files and delete them
+        run: |
+          cd "$CONFIG"
+          find . -type f -name '*.tar.xz' -print0 | while IFS= read -r -d '' file; do
+            echo "Extracting $file"
+            tar -xf "$file"
+            rm "$file"
+          done
+
+      - name: Apply zeromount Patches
+        if: inputs.susfs == 'true' && inputs.zeromount == 'true'
+        uses: ./.github/actions/zeromount
+        with:
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Fix WiFi and Bluetooth on Samsung 6.6 GKI devices
+        if: inputs.kernel_version == '6.6'
+        uses: ./.github/actions/6.6-fix
+        with:
+         branch: ${{ inputs.branch }}
+
+      - name: Add bbrv1
+        if: inputs.bbr == 'true'
+        uses: ./.github/actions/bbr
+
+      - name: Add BBG
+        if: inputs.bbg == 'true'
+        uses: ./.github/actions/bbg
+
+      - name: temp fix for m55 bootloop maybe
+        if: inputs.branch == 'SM-M556B-Oneui8'
+        uses: ./.github/actions/m55-fix
+
+      - name: Add unicodefix
+        if: inputs.unicodefix == 'true'
+        uses: ./.github/actions/unicode
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Add droidspace support
+        if: inputs.droidspace == 'true'
+        uses: ./.github/actions/droidspaces
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Add ntsync
+        if: inputs.ntsync == 'true'
+        uses: ./.github/actions/ntsync
+        with:
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
+          
+      - name: Set Kernel Configuration Variables
+        if: inputs.ksun == 'true'
+        uses: ./.github/actions/configs
+        with:
+         branch: ${{ inputs.branch }}
+
+      - name: Change Kernel Name and clean dirty
+        uses: ./.github/actions/kernel-name
+
+      - name: remove protected exports
+        uses: ./.github/actions/abi-export
+        
+      - name: Set file name
+        if: inputs.ksun == 'true'
+        uses: ./.github/actions/file-name
+        with:
+         branch: ${{ inputs.branch }}
+         android_version: ${{ inputs.android_version }}
+         kernel_version: ${{ inputs.kernel_version }}
      
-     if [[ "${{ inputs.branch }}" == "SM8450-Kleenn-S22" ]]; then
-       echo ">>> 执行 SM8450 专属定制源打包脚本..."
-       chmod +x ./build.sh
-       ./build.sh ak3
-       
-     elif [[ ${{ inputs.branch }} == SM-S928B* || "${{ inputs.branch }}" == "SM-S938B-Oneui7" || "${{ inputs.branch }}" == "SM-S931B-Oneui8" || "${{ inputs.branch }}" == "SM-F741B-Oneui8" || "${{ inputs.branch }}" == "SM-X710-Oneui6.1.1" ]]; then
-       chmod +x build_kernel_GKI.sh
-       ./build_kernel_GKI.sh
-       
-     elif [[ "${{ inputs.branch }}" == "SM-X916B" || "${{ inputs.branch }}" == "SM-F946N-Oneui7" || "${{ inputs.branch }}" == "SM-S916B-Oneui8" || "${{ inputs.branch }}" == "SM-S918B-Oneui8" || "${{ inputs.branch }}" == "SM-F946B-Oneui8" || "${{ inputs.branch }}" == "SM-S901E-Oneui8" || "${{ inputs.branch }}" == "SM-X800-Oneui8" || ${{ inputs.branch }} == SM-S911B* || "${{ inputs.branch }}" == "SM-M556B-Oneui8" ]]; then
-       chmod +x build_kernel_GKI.sh
-       ./build_kernel_GKI.sh
-       
-     elif [[ ${{ inputs.branch }} == SM-A546* || "${{ inputs.branch }}" == "SM-M146B-Oneui7-ADYJ2" || "${{ inputs.branch }}" == "SM-S908B-Oneui8-bitK" || ${{ inputs.branch }} == SM-A055* || "${{ inputs.branch }}" == "SM-X610-Oneui6.1.1-bit7" || "${{ inputs.branch }}" == "SM-A166B-Oneui7" ]]; then
-       chmod +x build_kernel.sh
-       ./build_kernel.sh
-       
-     elif [[ "${{ inputs.branch }}" == "SM-A566B" ]]; then
-       chmod +x build_script.sh
-       touch ./kernel-6.6/abi_symbollist.raw
-       touch ./kernel-6.6/abi_symbollist
-       ./build_script.sh
-       
-     elif [[ ${{ inputs.branch }} == SM-S926B* ]]; then
-       tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e9945:s5e9945_user_dist
-       
-     elif [[ ${{ inputs.branch }} == SM-A556* ]]; then
-       tools/bazel run --nocheck_bzl_visibility --config=stamp --sandbox_debug --verbose_failures --debug_make_verbosity=I //projects/s5e8845:s5e8845_user_dist
-       
-     elif [[ ${{ inputs.branch }} == SM-A055* || "${{ inputs.branch }}" == "SM-A075M-Oneui7" ]]; then
-       chmod +x build_kernel.sh
-       ./build_kernel.sh
-     fi
+      - name: Apply SUSFS Patches
+        if: inputs.susfs == 'true'
+        uses: ./.github/actions/susfs-patches
+        with:
+          android_version: ${{ inputs.android_version }}
+          kernel_version: ${{ inputs.kernel_version }}
+          branch: ${{ inputs.branch }}
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+         branch: ${{ inputs.branch }}
+
+      - name: Self-Verification Audit & Forensic Dump
+        if: always()
+        run: |
+          echo "======================================================="
+          echo "          === 终极法医鉴定：核心特性落盘全量核验 ==="
+          echo "======================================================="
+          cd $GITHUB_WORKSPACE
+          
+          # 寻找真实的内核源码根目录以防路径偏移
+          KERNEL_SRC=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1 | sed 's|/drivers/block/zram/zcomp.c||')
+          if [ -z "$KERNEL_SRC" ]; then KERNEL_SRC="."; fi
+          
+          echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
+          CONFIG_FILE=$(find . -name ".config" -type f | grep "common" | head -n 1) || true
+          if [ -f "$CONFIG_FILE" ]; then
+            echo "✅ 截获文件: $CONFIG_FILE"
+            grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
+          else
+            echo "❌ 未发现 common/.config"
+          fi
+          
+          echo -e "\n[2] 查验 zcomp.c (算法 UI 阵列是否被回滚？):"
+          ZCOMP_FILE="$KERNEL_SRC/drivers/block/zram/zcomp.c"
+          if [ -f "$ZCOMP_FILE" ]; then
+            grep -n -A 15 "static const char \* const backends" "$ZCOMP_FILE" || true
+          else
+            echo "❌ 未发现 zcomp.c"
+          fi
+          
+          echo -e "\n[2.5] 查验 Kconfig (搭桥注入是否存活？):"
+          KCONF_FILE="$KERNEL_SRC/drivers/block/zram/Kconfig"
+          if [ -f "$KCONF_FILE" ]; then
+            tail -n 15 "$KCONF_FILE" || true
+          else
+            echo "❌ 未发现 Kconfig"
+          fi
+          
+          echo -e "\n[3] 查验 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
+          INIT_FILE="$KERNEL_SRC/KernelSU/core/init.c"
+          if [ -f "$INIT_FILE" ]; then
+            echo "--- SukiSU-Ultra init.c 尾部情况 ---"
+            tail -n 25 "$INIT_FILE" || true
+          else
+            echo "❌ 未发现 SukiSU-Ultra init.c"
+          fi
+          
+          echo -e "\n[4] 查验 SukiSU-Ultra IOCTL 隧道 (dispatch.c):"
+          DISPATCH_FILE="$KERNEL_SRC/KernelSU/supercall/dispatch.c"
+          if [ -f "$DISPATCH_FILE" ]; then
+            echo "--- SukiSU-Ultra 预埋的 ioctl 代码 ---"
+            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 35 || true
+          else
+            echo "❌ 未发现 SukiSU-Ultra dispatch.c"
+          fi
+          echo "======================================================="
+          
+      - name: Prepare AnyKernel3
+        uses: ./.github/actions/ak3zip-prep
+        with:
+         branch: ${{ inputs.branch }}
+
+      - name: Upload AnyKernel3 Artifacts
+        id: upload_ak3
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.FILE_NAME }}-AnyKernel3
+          path: |
+            ./AnyKernel3/**
+          compression-level: 9
+
+      - name: "📝 Extract Compiled Modules | 提取独立驱动模块"
+        run: |
+          echo "🌐 正在进行工作区全域扫描提取..."
+          mkdir -p ./Extract-Modules
+          # 使用 $GITHUB_WORKSPACE 绝对路径全盘搜索，无惧相对路径偏移
+          find $GITHUB_WORKSPACE -type f -name "zram.ko" -exec cp {} ./Extract-Modules/ \; || echo "No zram.ko"
+          find $GITHUB_WORKSPACE -type f -name "lz4*.ko" -exec cp {} ./Extract-Modules/ \; || echo "No lz4*.ko"
+
+      - name: "📤 Upload Modules | 上传模块产物"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel_Modules_${{ inputs.kernel_version }}
+          path: ./Extract-Modules/*
+
+      - name: Scan and collect patch rejects
+        if: ${{ always() }}
+        run: |
+          set -e
+          CONFIG_DIR="$CONFIG"
+          REJECTS_DIR="$GITHUB_WORKSPACE/patch-rejects"
+          mkdir -p "$REJECTS_DIR"
+          # Find all .rej files under the configuration directory
+          mapfile -t REJS < <(find "$CONFIG_DIR" -type f -name '*.rej')
+          REJ_COUNT=${#REJS[@]}
+          echo "Found $REJ_COUNT .rej files under $CONFIG_DIR"
+          echo "REJ_COUNT=$REJ_COUNT" >> $GITHUB_ENV
+          if [ "$REJ_COUNT" -gt 0 ]; then
+            for REJ in "${REJS[@]}"; do
+              # Relative path from $CONFIG
+              REL="${REJ#"$CONFIG_DIR"/}"
+              DEST="$REJECTS_DIR/$REL"
+              mkdir -p "$(dirname "$DEST")"
+              cp "$REJ" "$DEST"
+              # Copy the associated original file alongside the .rej
+              ORIG="${REJ%.rej}"
+              if [ -f "$ORIG" ]; then
+                ORIG_DEST="$REJECTS_DIR/${REL%.rej}"
+                mkdir -p "$(dirname "$ORIG_DEST")"
+                cp "$ORIG" "$ORIG_DEST"
+              fi
+              echo "$REL" >> "$REJECTS_DIR/index.txt"
+            done
+          fi
+
+      - name: Generate Build Summary
+        if: ${{ always() }}
+        run: |
+          # Create build summary file for inclusion in Misc artifact
+          echo "# Kernel Build Summary" > build_summary.md
+          
+          # Add build variant header
+          echo "## ${{ env.FILE_NAME }}" >> build_summary.md
+          
+          # Add build info
+          echo "## Build Information" >> build_summary.md
+          echo "- **Android Version**: ${{ inputs.android_version }}" >> build_summary.md
+          echo "- **Kernel Version**: ${{ inputs.kernel_version }}.${{ inputs.sub_level }}" >> build_summary.md
+          echo "- **BBG**: Installed" >> build_summary.md
+          echo "" >> build_summary.md
+
+          # Get KernelSU-Next commit
+          if [ -d "$CONFIG/KernelSU-Next" ]; then
+            cd "$CONFIG/KernelSU-Next"
+            KSUN_COMMIT=$(git rev-parse HEAD)
+            KSUN_URL="https://github.com/WildKernels/KernelSU-Next/commit/$KSUN_COMMIT"
+            echo "- **KernelSU-Next**: [$KSUN_COMMIT]($KSUN_URL)" >> "$GITHUB_WORKSPACE/build_summary.md"
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "- **KernelSU-Next**: not present" >> build_summary.md
+          fi
+          
+          # Get Baseband-guard commit
+          if [ -d "$CONFIG/Baseband-guard" ]; then
+            cd "$CONFIG/Baseband-guard"
+            BBG_COMMIT=$(git rev-parse HEAD)
+            BBG_URL="https://github.com/vc-teahouse/Baseband-guard/commit/$BBG_COMMIT"
+            echo "- **Baseband-guard**: [$BBG_COMMIT]($BBG_URL)" >> "$GITHUB_WORKSPACE/build_summary.md"
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "- **Baseband-guard**: not present" >> build_summary.md
+          fi
+          
+          # Get SUSFS4KSU commit
+          if [ -d "$GITHUB_WORKSPACE/susfs4ksu" ]; then
+            cd "$GITHUB_WORKSPACE/susfs4ksu"
+            SUSFS_COMMIT=$(git rev-parse HEAD)
+            SUSFS_URL="https://gitlab.com/simonpunk/susfs4ksu/-/commit/$SUSFS_COMMIT"
+            echo "- **SUSFS4KSU (v2.1.0)**: [$SUSFS_COMMIT]($SUSFS_URL)" >> "$GITHUB_WORKSPACE/build_summary.md"
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "- **SUSFS4KSU (v2.1.0)**: not present" >> build_summary.md
+          fi
+          echo "" >> build_summary.md
+          
+          # Add artifact summary with presence verification
+          echo "## Build Artifacts" >> build_summary.md
+
+          # Verify AnyKernel3 contents - check if kernel Image was actually copied (indicates successful build)
+          if [ -d "AnyKernel3" ] && [ -f "AnyKernel3/Image" ]; then
+            AK3_STATUS="✅"
+          else
+            AK3_STATUS="❌"
+          fi
+          echo "- **AnyKernel3**: $AK3_STATUS ${{ env.FILE_NAME }}-AnyKernel3" >> build_summary.md
+
+          echo "### Misc (uploaded files)" >> build_summary.md
+          FILES_PRESENT=0
+          for f in "${{ env.FILE_NAME }}-Image" "${{ env.FILE_NAME }}-Image.gz" "${{ env.FILE_NAME }}-Image.lz4" "${{ env.FILE_NAME }}-boot.img" "${{ env.FILE_NAME }}-boot-gz.img" "${{ env.FILE_NAME }}-boot-lz4.img"; do
+            if [ -f "$f" ]; then FILES_PRESENT=$((FILES_PRESENT+1)); fi
+          done
+          if [ "$FILES_PRESENT" -gt 0 ]; then
+            MISC_STATUS="✅"
+          else
+            MISC_STATUS="❌"
+          fi
+          echo "- **Set**: $MISC_STATUS ${{ env.FILE_NAME }}-Misc" >> build_summary.md
+          if [ "$MISC_STATUS" = "✅" ]; then
+            echo "  Included:" >> build_summary.md
+            for f in "${{ env.FILE_NAME }}-Image" "${{ env.FILE_NAME }}-Image.gz" "${{ env.FILE_NAME }}-Image.lz4" "${{ env.FILE_NAME }}-boot.img" "${{ env.FILE_NAME }}-boot-gz.img" "${{ env.FILE_NAME }}-boot-lz4.img"; do
+              if [ -f "$f" ]; then
+                echo "  - $f" >> build_summary.md
+              fi
+            done
+          fi
+
+          echo "### Diagnostics" >> build_summary.md
+          echo "- **Rejected Patches**: ${{ env.FILE_NAME }}-Rejected-Patches" >> build_summary.md
+          if [ -f patch-rejects/index.txt ]; then
+            if [ -s patch-rejects/index.txt ]; then
+              echo "  Rejected files:" >> build_summary.md
+              while IFS= read -r line; do
+                echo "    - $line" >> build_summary.md
+              done < patch-rejects/index.txt
+            else
+              echo "  Rejected file list is empty." >> build_summary.md
+            fi
+          else
+            echo "  No rejected patches found." >> build_summary.md
+          fi
