@@ -31,30 +31,20 @@ runs:
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin)
       if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
-      # 👑【白盒终极补天手术】：自建独立 C 文件，强行补齐两组割裂的 Static Keys (修复 YAML 缩进)
+      # 👑【白盒终极补天手术】：使用 echo 阵列安全创建 susfs_keys.c，免疫 YAML 语法崩溃
       echo "   🩹 创建独立的 susfs_keys.c 模块并写入物理变量..."
-      cat << 'EOF' > "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
-      #include <linux/static_key.h>
-      #include <linux/export.h>
-
-      #ifdef CONFIG_KSU_SUSFS
-
-      /* 给 VFS 挂载点（input.c / read_write.c）使用的 TRUE 组 */
-      DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
-      EXPORT_SYMBOL(ksu_is_init_rc_hook_enabled);
-
-      DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
-      EXPORT_SYMBOL(ksu_is_input_hook_enabled);
-
-      /* 给 SukiSU 内部（ksud.c）使用的 FALSE 组 */
-      DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);
-      EXPORT_SYMBOL(ksu_input_hook_key_false);
-
-      DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
-      EXPORT_SYMBOL(ksu_init_rc_hook_key_false);
-
-      #endif
-      EOF
+      echo '#include <linux/static_key.h>' > "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo '#include <linux/export.h>' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo '#ifdef CONFIG_KSU_SUSFS' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'EXPORT_SYMBOL(ksu_is_init_rc_hook_enabled);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'EXPORT_SYMBOL(ksu_is_input_hook_enabled);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'EXPORT_SYMBOL(ksu_input_hook_key_false);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo 'EXPORT_SYMBOL(ksu_init_rc_hook_key_false);' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
+      echo '#endif' >> "$KERNEL_SRC/KernelSU/kernel/susfs_keys.c"
       
       # 将我们自建的补天模块强行插入编译序列！
       echo "kernelsu-objs += susfs_keys.o" >> "$KERNEL_SRC/KernelSU/kernel/Kbuild"
@@ -73,7 +63,7 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区 (严丝合缝对齐 SukiSU 原生框架)
+      # 🚨 SUSFS 冲突精准搭桥区 (严丝合缝对齐 SukiSU 原生 3参数框架)
       # =========================================================
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
@@ -94,10 +84,12 @@ runs:
       fi
 
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
-          echo "   🩹 精准修复 fs/read_write.c (恢复 Static Key 并严格传递 3 参数)..."
-          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
+          echo "   🩹 精准修复 fs/read_write.c (使用稳固的 3 参数钩子 + Static Key)..."
+          # 声明符合 ksud_integration.c 物理实现的 void 返回值 + 3 参数函数签名
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' "$KERNEL_SRC/fs/read_write.c"
           
-          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
+          # 安全传递 &buf 和 &count，完美契合 SukiSU 原生需求
+          awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd, (char __user **)&buf, (size_t *)&count);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
           rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
