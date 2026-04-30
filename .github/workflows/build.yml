@@ -221,9 +221,9 @@ jobs:
           fi
           
           echo -e "\n[3] 检查 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
-       # 【核心动态寻址】：无视底层目录重构，直接让 find 全局搜索！
-       INIT_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "init.c" | head -n 1)
-       if [ -n "$INIT_C" ]; then echo "✅ 截获文件: $INIT_C"; tail -n 15 "$INIT_C"; else echo "❌ 未发现 SukiSU-Ultra init.c"; fi
+          # 【核心动态寻址】：无视底层目录重构，直接让 find 全局搜索！
+          INIT_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "init.c" | head -n 1)
+          if [ -n "$INIT_C" ]; then echo "✅ 截获文件: $INIT_C"; tail -n 15 "$INIT_C"; else echo "❌ 未发现 SukiSU-Ultra init.c"; fi
        
           echo -e "\n[4] 检查 SukiSU-Ultra IOCTL 隧道 (dispatch.c / supercall.c):"
           DISPATCH_C=$(find "$KERNEL_SRC/KernelSU" -type f \( -name "dispatch.c" -o -name "supercall.c" \) | head -n 1)
