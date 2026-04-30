@@ -14,7 +14,6 @@ runs:
        cd "$COMMON"
        echo "🚀 开始部署成熟仓库: SukiSU-Ultra..."
        
-       # 核心情报复刻：使用欧加脚本里成熟的官方地址和 builtin 参数！
        curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
        
        if [ -d "KernelSU" ]; then
@@ -36,14 +35,11 @@ runs:
       cp susfs4ksu/kernel_patches/fs/* ./fs/ || true
       cp susfs4ksu/kernel_patches/include/linux/* ./include/linux/ || true
 
-      # 清除三星特有的安全防御冲突
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c || true
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c || true
           
-      # 【核心】：只打 50 号补丁！Ultra 内部自带了 KSU 端的 IOCTL 逻辑！
       patch -p1 < susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
       
-      # 兼容三星的 namespace
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c || true
 
       grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
@@ -54,6 +50,10 @@ runs:
       cd "$COMMON"
       echo "🚀 开始拉取并严密审计 ZRAM 神级补丁..."
       
+      # 【致命修复】：将之前被删掉的补丁仓库重新克隆回来！
+      rm -rf $GITHUB_WORKSPACE/SukiSU_patch_tmp
+      git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git $GITHUB_WORKSPACE/SukiSU_patch_tmp
+
       cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/include/linux/* ./include/linux/ || true
       cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/lib/* ./lib/ || true
       cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* ./crypto/ || true
