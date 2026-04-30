@@ -220,23 +220,14 @@ jobs:
             echo "❌ 未发现 Kconfig"
           fi
           
-          echo -e "\n[3] 查验 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
-          INIT_FILE="$KERNEL_SRC/KernelSU/core/init.c"
-          if [ -f "$INIT_FILE" ]; then
-            echo "--- SukiSU-Ultra init.c 尾部情况 ---"
-            tail -n 25 "$INIT_FILE" || true
-          else
-            echo "❌ 未发现 SukiSU-Ultra init.c"
-          fi
-          
-          echo -e "\n[4] 查验 SukiSU-Ultra IOCTL 隧道 (dispatch.c):"
-          DISPATCH_FILE="$KERNEL_SRC/KernelSU/supercall/dispatch.c"
-          if [ -f "$DISPATCH_FILE" ]; then
-            echo "--- SukiSU-Ultra 预埋的 ioctl 代码 ---"
-            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 35 || true
-          else
-            echo "❌ 未发现 SukiSU-Ultra dispatch.c"
-          fi
+          echo -e "\n[3] 检查 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
+       # 【核心动态寻址】：无视底层目录重构，直接让 find 全局搜索！
+       INIT_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "init.c" | head -n 1)
+       if [ -n "$INIT_C" ]; then echo "✅ 截获文件: $INIT_C"; tail -n 15 "$INIT_C"; else echo "❌ 未发现 SukiSU-Ultra init.c"; fi
+       
+          echo -e "\n[4] 检查 SukiSU-Ultra IOCTL 隧道 (dispatch.c / supercall.c):"
+          DISPATCH_C=$(find "$KERNEL_SRC/KernelSU" -type f \( -name "dispatch.c" -o -name "supercall.c" \) | head -n 1)
+          if [ -n "$DISPATCH_C" ]; then echo "✅ 截获文件: $DISPATCH_C"; grep -A 10 "ksu_supercall_handle_ioctl" "$DISPATCH_C" || true; else echo "❌ 未发现 SukiSU-Ultra 隧道核心文件"; fi
           echo "======================================================="
           
       - name: Prepare AnyKernel3
