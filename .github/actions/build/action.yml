@@ -15,6 +15,9 @@ runs:
      export IGNORE_DEFCONFIG_ERRORS=1
      cd "$CONFIG"
      
+     KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
+     AVER=$(echo "$CONFIG" | awk -F'-' '{print $(NF-1)}')
+     
      KERNEL_SRC=""
      for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
        if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
@@ -26,8 +29,8 @@ runs:
      if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
      echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
-     git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ inputs.android_version }}-${{ inputs.kernel_version }} || \
-     git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}
+     # 【致命修复】：剔除欧加专属的 oki 错误逻辑，直接精准锁定官方的 gki 分支！
+     git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
      
      cp susfs4ksu/kernel_patches/fs/* "$KERNEL_SRC/fs/" || true
      cp susfs4ksu/kernel_patches/include/linux/* "$KERNEL_SRC/include/linux/" || true
@@ -35,7 +38,7 @@ runs:
      sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' "$KERNEL_SRC/fs/open.c" || true
      sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' "$KERNEL_SRC/fs/namespace.c" || true
      
-     (cd "$KERNEL_SRC" && patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true)
+     (cd "$KERNEL_SRC" && patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch || true)
      awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' "$KERNEL_SRC/fs/namespace.c" > temp_ns.c && mv temp_ns.c "$KERNEL_SRC/fs/namespace.c" || true
      grep -q "susfs.o" "$KERNEL_SRC/fs/Makefile" || echo "obj-y += susfs.o" >> "$KERNEL_SRC/fs/Makefile"
 
@@ -48,7 +51,6 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch "$KERNEL_SRC/" 
      cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch "$KERNEL_SRC/" 
 
@@ -60,7 +62,7 @@ runs:
      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch || exit 1)
      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch || exit 1)
      
-     echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义 (已防 YAML 解析报错)..."
+     echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
      echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
      echo "# --- INJECTED BY SUKISU ACTION ---" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
      echo "config ZRAM_DEF_COMP_LZ4KD" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
@@ -77,7 +79,6 @@ runs:
      echo "    default \"lz4k_oplus\" if ZRAM_DEF_COMP_LZ4K_OPLUS" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
      echo "    default \"lzo-rle\"" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
 
-     # 强制从源码层面禁止外部模块化
      sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
      sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
 
@@ -86,7 +87,6 @@ runs:
      find . -name "build.config*" -type f -exec sed -i 's/KMI_SYMBOL_LIST_STRICT_MODE=1/KMI_SYMBOL_LIST_STRICT_MODE=0/g' {} + || true
 
      ALL_FLAGS=(
-         # --- KSU 核心 ---
          "CONFIG_KSU=y"
          "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
          "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -96,13 +96,11 @@ runs:
          "CONFIG_KSU_SUSFS_ENABLE_LOG=y" "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
          "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
          "CONFIG_KSU_SUSFS_SUS_SU=y" "CONFIG_KSU_SUSFS_SUS_MAP=y"
-         # --- ZRAM & Crypto ---
          "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y" "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
          "CONFIG_CRYPTO_842=y" "CONFIG_842_COMPRESS=y" "CONFIG_842_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4HC=y" "CONFIG_LZ4HC_COMPRESS=y" "CONFIG_LZ4HC_DECOMPRESS=y"
          "CONFIG_LZ4K_COMPRESS=y" "CONFIG_LZ4K_DECOMPRESS=y" "CONFIG_LZ4KD_COMPRESS=y" "CONFIG_LZ4KD_DECOMPRESS=y"
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
-         # --- Network ---
          "CONFIG_TCP_CONG_ADVANCED=y" "CONFIG_TCP_CONG_BBR=y" "CONFIG_NET_SCH_FQ=y" "CONFIG_TCP_CONG_WESTWOOD=y"
          "CONFIG_BPF_STREAM_PARSER=y" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "CONFIG_NETFILTER_XT_SET=y"
          "CONFIG_IP_SET=y" "CONFIG_IP_SET_MAX=65534" "CONFIG_IP_SET_BITMAP_IP=y" "CONFIG_IP_SET_BITMAP_IPMAC=y"
