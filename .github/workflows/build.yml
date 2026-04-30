@@ -196,42 +196,51 @@ jobs:
           echo "======================================================="
           cd $GITHUB_WORKSPACE
           
+          # 寻找真实的内核源码根目录以防路径偏移
+          KERNEL_SRC=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1 | sed 's|/drivers/block/zram/zcomp.c||')
+          if [ -z "$KERNEL_SRC" ]; then KERNEL_SRC="."; fi
+          
           echo -e "\n[1] 查验底层 .config (宏是否成功驻留):"
           CONFIG_FILE=$(find . -name ".config" -type f | grep "common" | head -n 1) || true
           if [ -f "$CONFIG_FILE" ]; then
             echo "✅ 截获文件: $CONFIG_FILE"
-            grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
+            grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CONFIG_FILE" || echo "❌ 严重警告：关键参数未落盘！"
           else
             echo "❌ 未发现 common/.config"
           fi
           
-          echo -e "\n[2] 查验 zcomp.c (神级算法是否注入 UI 阵列):"
-          ZCOMP_FILE=$(find . -name "zcomp.c" -type f | grep "drivers/block/zram" | head -n 1) || true
+          echo -e "\n[2] 查验 zcomp.c (算法 UI 阵列是否被回滚？):"
+          ZCOMP_FILE="$KERNEL_SRC/drivers/block/zram/zcomp.c"
           if [ -f "$ZCOMP_FILE" ]; then
-            grep -A 8 "static const char \* const backends" "$ZCOMP_FILE" || true
+            grep -n -A 15 "static const char \* const backends" "$ZCOMP_FILE" || true
           else
             echo "❌ 未发现 zcomp.c"
           fi
           
-          echo -e "\n[3] 查验 init.c (SUSFS 符号与挂载点火):"
-          INIT_FILE=$(find . -name "init.c" -type f | grep "KernelSU" | head -n 1) || true
-          if [ -f "$INIT_FILE" ]; then
-            echo "--- extern 声明区 ---"
-            head -n 20 "$INIT_FILE" | grep "susfs_init" || echo "未找到 extern 声明"
-            echo "--- 点火区 ---"
-            grep -A 3 "ksu_supercalls_init" "$INIT_FILE" || true
-            echo "--- 缺失符号填充区 ---"
-            tail -n 15 "$INIT_FILE" || true
+          echo -e "\n[2.5] 查验 Kconfig (搭桥注入是否存活？):"
+          KCONF_FILE="$KERNEL_SRC/drivers/block/zram/Kconfig"
+          if [ -f "$KCONF_FILE" ]; then
+            tail -n 15 "$KCONF_FILE" || true
           else
-            echo "❌ 未发现 KSU init.c"
+            echo "❌ 未发现 Kconfig"
           fi
           
-          echo -e "\n[4] 查验 dispatch.c (IOCTL 强行旁路):"
-          DISPATCH_FILE=$(find . -name "dispatch.c" -type f | grep "supercall" | head -n 1) || true
-          if [ -f "$DISPATCH_FILE" ]; then
-            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 25 || true
+          echo -e "\n[3] 查验 SukiSU-Ultra 引擎初始化 (SUSFS 符号与挂载点火):"
+          INIT_FILE="$KERNEL_SRC/KernelSU/core/init.c"
+          if [ -f "$INIT_FILE" ]; then
+            echo "--- SukiSU-Ultra init.c 尾部情况 ---"
+            tail -n 25 "$INIT_FILE" || true
           else
-            echo "❌ 未发现 dispatch.c"
+            echo "❌ 未发现 SukiSU-Ultra init.c"
+          fi
+          
+          echo -e "\n[4] 查验 SukiSU-Ultra IOCTL 隧道 (dispatch.c):"
+          DISPATCH_FILE="$KERNEL_SRC/KernelSU/supercall/dispatch.c"
+          if [ -f "$DISPATCH_FILE" ]; then
+            echo "--- SukiSU-Ultra 预埋的 ioctl 代码 ---"
+            awk '/long ksu_supercall_handle_ioctl/,/}/' "$DISPATCH_FILE" | head -n 35 || true
+          else
+            echo "❌ 未发现 SukiSU-Ultra dispatch.c"
           fi
           echo "======================================================="
           
