@@ -8,31 +8,28 @@ inputs:
 runs:
   using: composite
   steps:
-   - name: Apply SUSFS to Kernel (Bypass KSU-Next IOCTL Patching)
+   - name: Apply SUSFS to Kernel
      shell: bash
      run: |
       cd "$COMMON"
       
-      # 克隆 susfs4ksu 仓库以获取针对 GKI 的内核层补丁
       git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ inputs.android_version }}-${{ inputs.kernel_version }} || \
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}
       
       cp susfs4ksu/kernel_patches/fs/* ./fs/ || true
       cp susfs4ksu/kernel_patches/include/linux/* ./include/linux/ || true
 
-      echo "#include <linux/types.h>" > fs/ksu_dummy_hooks.c
-      echo "void ksu_init_rc_hook(void) {}" >> fs/ksu_dummy_hooks.c
-      echo "int ksu_execveat_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
-      echo "int ksu_input_hook(void) { return 0; }" >> fs/ksu_dummy_hooks.c
-      grep -q "ksu_dummy_hooks.o" fs/Makefile || echo "obj-y += ksu_dummy_hooks.o" >> fs/Makefile
-
+      # 保留三星专属的三星 Knox 防御机制消除（OPlus 脚本没有，但我们必须有）
       sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c || true
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' fs/namespace.c || true
           
-      # 【核心】：只打 50 号补丁（Linux VFS 挂载层），坚决不打 10 号补丁（KSU 内部 IOCTL 层，因 Ultra 已自带）！
+      # 【核心 1】：仅应用 Linux 系统层挂载劫持，由内置的 SukiSU 响应。
       patch -p1 < susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+      
+      # 三星独占 Namespace 修补
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' fs/namespace.c > temp_ns.c && mv temp_ns.c fs/namespace.c || true
 
+      # 应用设备定制补丁
       shopt -s nullglob
       patches=("$KERNEL_PATCHES/samsung/${{ inputs.branch }}"/*.patch)
       if [ ${#patches[@]} -gt 0 ]; then
@@ -40,14 +37,5 @@ runs:
        for p in *.patch; do patch -p1 < "$p" || true; done
       fi
 
+      # 【核心 2】：只加 susfs.o 进文件树编译。由 SukiSU 内部的 Kconfig 统筹注册选项！
       grep -q "susfs.o" fs/Makefile || echo "obj-y += susfs.o" >> fs/Makefile
-      
-      # 注册配置开关
-      echo "config KSU_SUSFS" >> fs/Kconfig
-      echo "    bool \"SUSFS Support\"" >> fs/Kconfig
-      echo "    default y" >> fs/Kconfig
-      for conf in KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT KSU_SUSFS_SUS_KSTAT KSU_SUSFS_SUS_OVERLAYFS KSU_SUSFS_TRY_UMOUNT KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_SU KSU_SUSFS_SUS_MAP; do
-        echo "config $conf" >> fs/Kconfig
-        echo "    bool" >> fs/Kconfig
-        echo "    default y" >> fs/Kconfig
-      done
