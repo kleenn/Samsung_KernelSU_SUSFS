@@ -35,19 +35,22 @@ runs:
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k/crypto/* "$KERNEL_SRC/crypto/" || true
      cp -r $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/lz4k_oplus "$KERNEL_SRC/lib/" || true
 
-     # 【信任补丁】：只打补丁！废除所有手动 echo Kconfig 和 Makefile，废除手动 sed zcomp.c！
+     # 信任补丁：只打补丁！
      KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4kd.patch ./ && patch -p1 -F 3 < lz4kd.patch || true)
      (cd "$KERNEL_SRC" && cp $GITHUB_WORKSPACE/SukiSU_patch_tmp/other/zram/zram_patch/${KVER}/lz4k_oplus.patch ./ && patch -p1 -F 3 < lz4k_oplus.patch || true)
 
-     # 降维打击：从源码层面剥夺 ZRAM 和 ZSMALLOC 的外部模块化能力，强制变 bool (仅内置)
+     # 强制内置 ZRAM 和 ZSMALLOC
      sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
      sed -i 's/tristate "Memory allocator for compressed pages"/bool "Memory allocator for compressed pages"/g' "$KERNEL_SRC/mm/Kconfig" || true
 
      echo "🚀 部署原生 Defconfig 模板隔离注入..."
      
+     # 【致命修复】：补齐 CONFIG_KSU=y 和 CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y，激活管理器编译通道！
      CORE_FLAGS=(
-         "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+         "CONFIG_KSU=y"
+         "CONFIG_KSU_SUSFS=y" "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" 
+         "CONFIG_KSU_SUSFS_SUS_PATH=y" "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
          "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
          "CONFIG_KSU_SUSFS_SUS_KSTAT=y" "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
          "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
@@ -60,7 +63,6 @@ runs:
          "CONFIG_CRYPTO_LZ4K=y" "CONFIG_CRYPTO_LZ4KD=y" "CONFIG_CRYPTO_LZ4K_OPLUS=y"
      )
      
-     # 【终极修复】：完全利用补丁生成的 ZRAM_DEF_COMP_LZ4KD 机制指定默认算法，保持 ZRAM=y 和 WRITEBACK
      GLOBAL_FLAGS=(
          "CONFIG_ZRAM=y" "CONFIG_ZSMALLOC=y" "CONFIG_ZRAM_WRITEBACK=y"
          "CONFIG_ZRAM_DEF_COMP_LZ4KD=y"
