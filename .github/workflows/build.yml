@@ -221,7 +221,7 @@ jobs:
           fi
           
           echo -e "\n[3] 检查 SukiSU-Ultra 引擎核心 (hook.c):"
-       HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
+          HOOK_C=$(find "$KERNEL_SRC/KernelSU" -type f -name "hook.c" | head -n 1)
           if [ -n "$HOOK_C" ]; then echo "✅ 截获文件: $HOOK_C"; grep -A 5 "ksu_is_init_rc_hook_enabled" "$HOOK_C" || true; else echo "❌ 未发现 SukiSU-Ultra hook.c"; fi
        
           echo -e "\n[4] 检查 SukiSU-Ultra 运行时核心 (ksud.c):"
@@ -236,9 +236,9 @@ jobs:
           if [ ! -d "$TARGET_CONF_DIR" ]; then TARGET_CONF_DIR="$KERNEL_SRC"; fi
           CHECK_CONF=$(find "$TARGET_CONF_DIR" -type f \( -name "*defconfig" -o -name "*.config" \) | head -n 1)
           if [ -n "$CHECK_CONF" ]; then
-           grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CHECK_CONF" || echo "❌ 警告: 关键参数未注入 defconfig 蓝本！"
+            grep -iE "^CONFIG_ZRAM=|^CONFIG_KSU_SUSFS=|^CONFIG_CRYPTO_LZ4KD=|^CONFIG_NETFILTER_XT_TARGET_TPROXY=|^CONFIG_TCP_CONG_BBR=|^CONFIG_ZRAM_DEF_COMP_LZ4KD=" "$CHECK_CONF" || echo "❌ 警告: 关键参数未注入 defconfig 蓝本！"
           else
-              echo "❌ 警告: 未找到 defconfig 蓝本文件！"
+            echo "❌ 警告: 未找到 defconfig 蓝本文件！"
           fi
           echo "======================================================="
           
