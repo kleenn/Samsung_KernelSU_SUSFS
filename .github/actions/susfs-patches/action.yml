@@ -39,59 +39,53 @@ runs:
       sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ { /#ifdef CONFIG_KDP_NS/,/#endif/ { /#else/,/#endif/!d; /#else/d; /#endif/d } }' "$KERNEL_SRC/fs/namespace.c" || true
       
       echo ">>> 应用 50 号 SUSFS 补丁..."
-      (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 部分 Hunk 存在偏移，进入动态搭桥急救流程..."
+      (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突动态修复区 (基于法医取证结果)
+      # 🚨 SUSFS 冲突精准搭桥区 (基于 100% 物理源码取证)
       # =========================================================
       
-      # 修复 1: fs/exec.c (补充缺失的头文件)
+      # 1. 修复 fs/exec.c (精准插在 uaccess.h 之上)
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
-          echo "   🩹 修复 fs/exec.c..."
-          awk '/^#include/ && !done { print "#ifdef CONFIG_KSU_SUSFS\n#include <linux/susfs_def.h>\n#endif"; done=1 } 1' "$KERNEL_SRC/fs/exec.c" > "$KERNEL_SRC/temp_exec.c" && mv "$KERNEL_SRC/temp_exec.c" "$KERNEL_SRC/fs/exec.c"
+          echo "   🩹 精准修复 fs/exec.c..."
+          sed -i '/#include <linux\/uaccess.h>/i #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/exec.c"
           rm "$KERNEL_SRC/fs/exec.c.rej"
       fi
 
-      # 修复 2: fs/proc/base.c (补充缺失的头文件)
+      # 2. 修复 fs/namespace.c (精准插在 internal.h 之下)
+      if [ -f "$KERNEL_SRC/fs/namespace.c.rej" ]; then
+          echo "   🩹 精准修复 fs/namespace.c..."
+          sed -i '/#include "internal.h"/a \n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n#define CL_COPY_MNT_NS BIT(25)\n#endif' "$KERNEL_SRC/fs/namespace.c"
+          rm "$KERNEL_SRC/fs/namespace.c.rej"
+      fi
+
+      # 3. 修复 fs/proc/base.c (精准插在 oom.h 之上)
       if [ -f "$KERNEL_SRC/fs/proc/base.c.rej" ]; then
-          echo "   🩹 修复 fs/proc/base.c..."
-          awk '/^#include/ && !done { print "#if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif"; done=1 } 1' "$KERNEL_SRC/fs/proc/base.c" > "$KERNEL_SRC/temp_base.c" && mv "$KERNEL_SRC/temp_base.c" "$KERNEL_SRC/fs/proc/base.c"
+          echo "   🩹 精准修复 fs/proc/base.c..."
+          sed -i '/#include <trace\/events\/oom.h>/i #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/proc/base.c"
           rm "$KERNEL_SRC/fs/proc/base.c.rej"
       fi
 
-      # 修复 3: fs/namespace.c (追加隔离挂载相关的宏声明)
-      if [ -f "$KERNEL_SRC/fs/namespace.c.rej" ]; then
-          echo "   🩹 修复 fs/namespace.c..."
-          cat << 'EOF' > "$KERNEL_SRC/temp_ns_header.h"
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-#include <linux/susfs_def.h>
-extern bool susfs_is_current_ksu_domain(void);
-extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
-#define CL_COPY_MNT_NS BIT(25)
-#endif
-EOF
-          sed -i '/#include "internal.h"/r '"$KERNEL_SRC/temp_ns_header.h"'' "$KERNEL_SRC/fs/namespace.c"
-          rm "$KERNEL_SRC/temp_ns_header.h" "$KERNEL_SRC/fs/namespace.c.rej"
-      fi
-
-      # 修复 4: fs/read_write.c (精准包裹 ksys_read 系统调用)
+      # 4. 修复 fs/read_write.c (避开旧版 KSU 钩子，精准拦截 ksys_read)
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
-          echo "   🩹 修复 fs/read_write.c..."
-          # 插入 extern 声明
-          awk '/SYSCALL_DEFINE3\(read,/ { print "#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif\n"; print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw1.c" && mv "$KERNEL_SRC/temp_rw1.c" "$KERNEL_SRC/fs/read_write.c"
-          # 插入钩子拦截逻辑
-          awk '/return ksys_read\(fd, buf, count\);/ && !done { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif"; print; done=1; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw2.c" && mv "$KERNEL_SRC/temp_rw2.c" "$KERNEL_SRC/fs/read_write.c"
+          echo "   🩹 精准修复 fs/read_write.c..."
+          # 插入 extern 声明到 SYSCALL_DEFINE3(read) 上方
+          sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif\n' "$KERNEL_SRC/fs/read_write.c"
+          # 将钩子精准插在 return ksys_read 的上方
+          sed -i '/SYSCALL_DEFINE3(read,/,/return ksys_read/ { /return ksys_read/i \
+#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif
+          }' "$KERNEL_SRC/fs/read_write.c"
           rm "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
-      # 终极把关：如果还有未在预料之中的新冲突，立即熔断！
+      # 终极把关：扫描是否有预料之外的其它冲突
       REMAINING_REJ=$(find "$KERNEL_SRC" -name "*.rej" -type f)
       if [ -n "$REMAINING_REJ" ]; then
           echo "❌ 发现未知的 SUSFS 补丁冲突！请仙查看："
           for f in $REMAINING_REJ; do echo "--- 🚨 冲突文件: $f ---"; cat "$f"; done
           exit 1
       fi
-      echo "✅ 所有 SUSFS 冲突修复完毕，代码无缝缝合！"
+      echo "✅ SUSFS 冲突修复完毕，代码无缝缝合！"
       # =========================================================
 
       # 防止复打的安全检测
@@ -205,4 +199,6 @@ EOF
        ls -la "$KERNEL_SRC/KernelSU" | head -n 5 || echo "❌ 警告: SukiSU-Ultra 目录丢失！"
        echo -e "\n[4] 检查 Git 护盾状态 (最后一次提交记录):"
        (cd "$KERNEL_SRC" && git log -n 1) || echo "❌ 警告: Git 日志读取失败"
+       echo -e "\n[5] 检查核心拦截点 (fs/read_write.c):"
+       grep -B 2 -A 5 "SYSCALL_DEFINE3(read" "$KERNEL_SRC/fs/read_write.c" || echo "❌ 警告: read_write 挂载点核验失败"
        echo "======================================================="
