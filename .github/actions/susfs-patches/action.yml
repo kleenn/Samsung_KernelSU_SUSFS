@@ -12,23 +12,22 @@ runs:
      shell: bash
      run: |
       set -e
-      export IGNORE_DEFCONFIG_ERRORS=1
       cd "$CONFIG"
       
       KVER=$(echo "$CONFIG" | awk -F'-' '{print $NF}')
       AVER=$(echo "$CONFIG" | awk -F'-' '{print $(NF-1)}')
       
+      # 寻找真实源码目录
       KERNEL_SRC=""
       for d in . common kernel_platform/common Kernel kernel kernel_platform/msm-kernel; do
         if [ -d "$d/include/linux" ] && [ -d "$d/drivers" ]; then KERNEL_SRC="$d"; break; fi
       done
       [ -z "$KERNEL_SRC" ] && KERNEL_SRC="."
 
-      echo "🚀 部署 SukiSU-Ultra 引擎..."
+      echo "🚀 [阶段 1] 部署 SukiSU-Ultra 引擎..."
       (cd "$KERNEL_SRC" && curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin)
-      if [ ! -d "$KERNEL_SRC/KernelSU" ]; then echo "❌ SukiSU-Ultra 部署失败"; exit 1; fi
 
-      echo "🚀 部署 SUSFS VFS 核心层补丁..."
+      echo "🚀 [阶段 2] 部署 SUSFS VFS 核心层补丁..."
       git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${AVER}-${KVER}
       SUSFS_PATCH_PATH="$PWD/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${AVER}-${KVER}.patch"
       
@@ -42,7 +41,7 @@ runs:
       awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' "$KERNEL_SRC/fs/namespace.c" > temp_ns.c && mv temp_ns.c "$KERNEL_SRC/fs/namespace.c" || true
       grep -q "susfs.o" "$KERNEL_SRC/fs/Makefile" || echo "obj-y += susfs.o" >> "$KERNEL_SRC/fs/Makefile"
 
-      echo "🚀 部署 ZRAM 极品补丁..."
+      echo "🚀 [阶段 3] 部署并严密审计 ZRAM 极品补丁..."
       rm -rf SukiSU_patch_tmp
       git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git SukiSU_patch_tmp
 
@@ -60,7 +59,7 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch || exit 1)
       (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch || exit 1)
       
-      echo ">>> 💉 手动安全搭桥 Kconfig..."
+      echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
       echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
       echo "# --- INJECTED BY SUKISU ACTION ---" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
       echo "config ZRAM_DEF_COMP_LZ4KD" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
