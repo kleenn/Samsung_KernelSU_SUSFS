@@ -42,41 +42,34 @@ runs:
       (cd "$KERNEL_SRC" && patch -p1 < "$SUSFS_PATCH_PATH") || echo "⚠️ 触发三星 OEM 代码偏移，进入精准外科搭桥手术..."
 
       # =========================================================
-      # 🚨 SUSFS 冲突精准搭桥区 (基于 100% 物理源码取证)
+      # 🚨 SUSFS 冲突精准搭桥区
       # =========================================================
-      
-      # 1. 修复 fs/exec.c (精准插在 uaccess.h 之上)
       if [ -f "$KERNEL_SRC/fs/exec.c.rej" ]; then
           echo "   🩹 精准修复 fs/exec.c..."
           sed -i '/#include <linux\/uaccess.h>/i #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/exec.c"
-          rm "$KERNEL_SRC/fs/exec.c.rej"
+          rm -f "$KERNEL_SRC/fs/exec.c.rej"
       fi
 
-      # 2. 修复 fs/namespace.c (精准插在 internal.h 之下)
       if [ -f "$KERNEL_SRC/fs/namespace.c.rej" ]; then
           echo "   🩹 精准修复 fs/namespace.c..."
           sed -i '/#include "internal.h"/a \n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n#define CL_COPY_MNT_NS BIT(25)\n#endif' "$KERNEL_SRC/fs/namespace.c"
-          rm "$KERNEL_SRC/fs/namespace.c.rej"
+          rm -f "$KERNEL_SRC/fs/namespace.c.rej"
       fi
 
-      # 3. 修复 fs/proc/base.c (精准插在 oom.h 之上)
       if [ -f "$KERNEL_SRC/fs/proc/base.c.rej" ]; then
           echo "   🩹 精准修复 fs/proc/base.c..."
           sed -i '/#include <trace\/events\/oom.h>/i #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux\/susfs_def.h>\n#endif' "$KERNEL_SRC/fs/proc/base.c"
-          rm "$KERNEL_SRC/fs/proc/base.c.rej"
+          rm -f "$KERNEL_SRC/fs/proc/base.c.rej"
       fi
 
-      # 4. 修复 fs/read_write.c (避开旧版 KSU 钩子，精准拦截 ksys_read)
       if [ -f "$KERNEL_SRC/fs/read_write.c.rej" ]; then
           echo "   🩹 精准修复 fs/read_write.c..."
-          # 插入 extern 声明到 SYSCALL_DEFINE3(read) 上方
           sed -i '/SYSCALL_DEFINE3(read,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\nextern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);\n#endif' "$KERNEL_SRC/fs/read_write.c"
-          # 【YAML修复点】：使用单行 awk 安全插入代码块，绝不破坏缩进
           awk '/SYSCALL_DEFINE3\(read,/,/return ksys_read/ { if (/return ksys_read/ && !done) { print "#ifdef CONFIG_KSU_SUSFS\n\tif (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))\n\t\tksu_handle_sys_read(fd);\n#endif"; done=1 } print; next } 1' "$KERNEL_SRC/fs/read_write.c" > "$KERNEL_SRC/temp_rw.c" && mv "$KERNEL_SRC/temp_rw.c" "$KERNEL_SRC/fs/read_write.c"
-          rm "$KERNEL_SRC/fs/read_write.c.rej"
+          rm -f "$KERNEL_SRC/fs/read_write.c.rej"
       fi
 
-      # 终极把关：扫描是否有预料之外的其它冲突
+      # SUSFS 通用熔断审计
       REMAINING_REJ=$(find "$KERNEL_SRC" -name "*.rej" -type f)
       if [ -n "$REMAINING_REJ" ]; then
           echo "❌ 发现未知的 SUSFS 补丁冲突！请仙查看："
@@ -86,7 +79,6 @@ runs:
       echo "✅ SUSFS 冲突修复完毕，代码无缝缝合！"
       # =========================================================
 
-      # 防止复打的安全检测
       if ! grep -q "copy_flags |= CL_COPY_MNT_NS;" "$KERNEL_SRC/fs/namespace.c"; then
           awk '/new = copy_tree\(old, old->mnt\.mnt_root, copy_flags\);/{print "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n\tcopy_flags |= CL_COPY_MNT_NS;\n#endif"}1' "$KERNEL_SRC/fs/namespace.c" > temp_ns_compat.c && mv temp_ns_compat.c "$KERNEL_SRC/fs/namespace.c" || true
       fi
@@ -107,8 +99,23 @@ runs:
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4kd.patch > lz4kd_clean.patch)
       (cd "$KERNEL_SRC" && awk 'BEGIN {skip=0} /^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=1} /^diff -u/ && !/^diff -u.*drivers\/block\/zram\/Kconfig/ {skip=0} {if(!skip) print}' lz4k_oplus.patch > lz4k_oplus_clean.patch)
 
-      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch || exit 1)
-      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch || exit 1)
+      # =========================================================
+      # 🚨 ZRAM 通用取证熔断系统
+      # =========================================================
+      echo ">>> 应用 lz4kd 补丁..."
+      if ! (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch); then
+          echo "❌ lz4kd 补丁应用失败！正在抓取冲突证据..."
+          (cd "$KERNEL_SRC" && find . -name "*.rej" -type f -exec echo -e "\n--- 🚨 冲突文件: {} ---" \; -exec cat {} \;)
+          exit 1
+      fi
+
+      echo ">>> 应用 lz4k_oplus 补丁..."
+      if ! (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch); then
+          echo "❌ lz4k_oplus 补丁应用失败！正在抓取冲突证据..."
+          (cd "$KERNEL_SRC" && find . -name "*.rej" -type f -exec echo -e "\n--- 🚨 冲突文件: {} ---" \; -exec cat {} \;)
+          exit 1
+      fi
+      # =========================================================
       
       echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
       echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
