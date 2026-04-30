@@ -39,6 +39,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - branch: "SM8450-Kleenn-S22"
+            android_version: "android12"
+            kernel_version: "5.10"
           - branch: "SM-S938B-Oneui7"
             android_version: "android15"
             kernel_version: "6.6"
