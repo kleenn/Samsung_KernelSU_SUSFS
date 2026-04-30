@@ -207,7 +207,7 @@ jobs:
           echo -e "\n[2] 查验 zcomp.c (算法 UI 阵列是否被回滚？):"
           ZCOMP_FILE="$KERNEL_SRC/drivers/block/zram/zcomp.c"
           if [ -f "$ZCOMP_FILE" ]; then
-            grep -n -A 15 "static const char \* const backends" "$ZCOMP_FILE" || true
+            grep -n -A 25 "static const char \* const backends" "$ZCOMP_FILE" || true
           else
             echo "❌ 未发现 zcomp.c"
           fi
@@ -215,7 +215,7 @@ jobs:
           echo -e "\n[2.5] 查验 Kconfig (搭桥注入是否存活？):"
           KCONF_FILE="$KERNEL_SRC/drivers/block/zram/Kconfig"
           if [ -f "$KCONF_FILE" ]; then
-            tail -n 15 "$KCONF_FILE" || true
+            tail -n 25 "$KCONF_FILE" || true
           else
             echo "❌ 未发现 Kconfig"
           fi
