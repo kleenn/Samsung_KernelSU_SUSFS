@@ -12,7 +12,6 @@ runs:
     shell: bash
     run: |
      set -e
-     # 绝对禁止使用 set -x 防止日志爆炸！
      export IGNORE_DEFCONFIG_ERRORS=1
      cd "$CONFIG"
      
@@ -61,24 +60,22 @@ runs:
      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4kd_clean.patch || exit 1)
      (cd "$KERNEL_SRC" && patch -p1 -F 3 < lz4k_oplus_clean.patch || exit 1)
      
-     echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义..."
-     cat << 'EOF' >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
-
-# --- INJECTED BY SUKISU ACTION ---
-config ZRAM_DEF_COMP_LZ4KD
-    bool "lz4kd"
-    depends on ZRAM
-
-config ZRAM_DEF_COMP_LZ4K_OPLUS
-    bool "lz4k_oplus"
-    depends on ZRAM
-
-config ZRAM_DEF_COMP
-    string
-    default "lz4kd" if ZRAM_DEF_COMP_LZ4KD
-    default "lz4k_oplus" if ZRAM_DEF_COMP_LZ4K_OPLUS
-    default "lzo-rle"
-EOF
+     echo ">>> 💉 手动搭桥：向原版 Kconfig 尾部安全注入宏定义 (已防 YAML 解析报错)..."
+     echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "# --- INJECTED BY SUKISU ACTION ---" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "config ZRAM_DEF_COMP_LZ4KD" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    bool \"lz4kd\"" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    depends on ZRAM" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "config ZRAM_DEF_COMP_LZ4K_OPLUS" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    bool \"lz4k_oplus\"" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    depends on ZRAM" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "config ZRAM_DEF_COMP" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    string" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    default \"lz4kd\" if ZRAM_DEF_COMP_LZ4KD" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    default \"lz4k_oplus\" if ZRAM_DEF_COMP_LZ4K_OPLUS" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
+     echo "    default \"lzo-rle\"" >> "$KERNEL_SRC/drivers/block/zram/Kconfig"
 
      # 强制从源码层面禁止外部模块化
      sed -i 's/tristate "Compressed RAM block device support"/bool "Compressed RAM block device support"/g' "$KERNEL_SRC/drivers/block/zram/Kconfig" || true
